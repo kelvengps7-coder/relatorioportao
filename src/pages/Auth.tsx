@@ -18,82 +18,8 @@ export default function Auth() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-  const [customLogo, setCustomLogo] = useState<string | null>(null);
-
-  // Buscar logo do admin no Supabase
-  useEffect(() => {
-    const fetchLogo = async () => {
-      try {
-        console.log('Buscando logo do admin...');
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('system_logo_url')
-          .eq('role', 'admin')
-          .maybeSingle();
-        
-        console.log('Resultado da busca do logo:', { data, error });
-        
-        if (error) {
-          console.error('Erro na query do logo:', error);
-        }
-        
-        if (data && data.system_logo_url) {
-          console.log('Logo encontrado:', data.system_logo_url);
-          setCustomLogo(data.system_logo_url);
-        } else {
-          console.log('Nenhum logo encontrado no banco, verificando localStorage...');
-          // Fallback para localStorage
-          const localLogo = localStorage.getItem('customLogo');
-          if (localLogo) {
-            console.log('Logo encontrado no localStorage:', localLogo);
-            setCustomLogo(localLogo);
-          } else {
-            console.log('Nenhum logo encontrado');
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao buscar logo:', error);
-        // Fallback para localStorage em caso de erro
-        const localLogo = localStorage.getItem('customLogo');
-        if (localLogo) {
-          console.log('Usando logo do localStorage como fallback:', localLogo);
-          setCustomLogo(localLogo);
-        }
-      }
-    };
-
-    fetchLogo();
-  }, []);
-
-  // Escutar mudanças no logo em tempo real
-  useEffect(() => {
-    console.log('Configurando canal de escuta em tempo real para logo...');
-    const channel = supabase
-      .channel('logo-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'profiles',
-        filter: 'role=eq.admin'
-      }, (payload: any) => {
-        console.log('Mudança detectada no logo:', payload);
-        if (payload.new && payload.new.system_logo_url) {
-          console.log('Novo logo recebido via realtime:', payload.new.system_logo_url);
-          setCustomLogo(payload.new.system_logo_url);
-        } else if (payload.new && !payload.new.system_logo_url) {
-          console.log('Logo removido via realtime');
-          setCustomLogo(null);
-        }
-      })
-      .subscribe((status) => {
-        console.log('Status do canal realtime:', status);
-      });
-
-    return () => {
-      console.log('Removendo canal de escuta do logo...');
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const [systemLogoUrl, setSystemLogoUrl] = useState<string | null>(null);
+  const [logoLoading, setLogoLoading] = useState(true);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -101,6 +27,37 @@ export default function Auth() {
       navigate('/');
     }
   }, [user, loading, navigate]);
+
+  // Fetch system logo
+  useEffect(() => {
+    const fetchSystemLogo = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('system_logo_url')
+          .eq('role', 'admin')
+          .not('system_logo_url', 'is', null)
+          .limit(1)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Erro ao buscar logo do sistema:', error);
+          setSystemLogoUrl('/public/tower-logo.png'); // Fallback to default
+        } else if (data && data.system_logo_url) {
+          setSystemLogoUrl(data.system_logo_url);
+        } else {
+          setSystemLogoUrl('/public/tower-logo.png'); // Fallback to default if no custom logo
+        }
+      } catch (error) {
+        console.error('Erro ao buscar logo do sistema:', error);
+        setSystemLogoUrl('/public/tower-logo.png'); // Fallback to default on error
+      } finally {
+        setLogoLoading(false);
+      }
+    };
+
+    fetchSystemLogo();
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,7 +94,7 @@ export default function Auth() {
   };
 
 
-  if (loading) {
+  if (loading || logoLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -156,21 +113,14 @@ export default function Auth() {
           {/* Logo and Title Section */}
           <div className="text-center mb-10">
             <div className="mb-6 flex justify-center">
-              <div className="w-20 h-20 bg-white flex items-center justify-center overflow-hidden">
-                {customLogo ? (
+              <div className="w-20 h-20 flex items-center justify-center overflow-hidden rounded-none">
+                {systemLogoUrl && (
                   <OptimizedImage 
-                    src={customLogo} 
+                    src={systemLogoUrl}
                     alt="Logo da Congregação" 
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover rounded-none"
                     objectFit="cover"
                   />
-                ) : (
-                  <div className="bg-[#8DB0D9] w-full h-full flex items-center justify-center">
-                    <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <rect width="48" height="48" fill="#8DB0D9"/>
-                      <path d="M12 8h24v8h-2v4h2v20H12V20h2v-4h-2V8zm4 4v4h4V12h-4zm8 0v4h4V12h-4zm8 0v4h4V12h-4zm-16 8v16h16V20H16z" fill="white"/>
-                    </svg>
-                  </div>
                 )}
               </div>
             </div>
