@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Package, Search, Edit, History, Download, Settings, MoreVertical, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "@/hooks/useAuditLog";
@@ -29,8 +28,6 @@ interface MovementLocal {
   created_at: string;
   motivo?: string;
 }
-
-const ROWS_PER_PAGE = 10;
 
 const Estoque = () => {
   const { canManageStock, canEdit, isVisualizador } = useAuth();
@@ -50,9 +47,6 @@ const Estoque = () => {
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{url: string, title: string} | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
-  const [totalPublications, setTotalPublications] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.ceil(totalPublications / ROWS_PER_PAGE);
 
   const { toast } = useToast();
   const { logAction, showSuccessMessage, showErrorMessage } = useAuditLog();
@@ -72,7 +66,7 @@ const Estoque = () => {
     try {
       let query = supabase
         .from('publications')
-        .select('*', { count: 'exact' });
+        .select('*');
 
       if (searchTerm) {
         query = query.or(`name.ilike.%${searchTerm}%,code.ilike.%${searchTerm}%`);
@@ -81,17 +75,12 @@ const Estoque = () => {
         query = query.eq('category', categoryFilter);
       }
 
-      const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
-      const endIndex = startIndex + ROWS_PER_PAGE - 1;
-      query = query.range(startIndex, endIndex);
-
       query = query.order('category, name');
 
-      const { data, error, count } = await query;
+      const { data, error } = await query;
       
       if (error) throw error;
       setPublications(data || []);
-      setTotalPublications(count || 0);
     } catch (error) {
       console.error('Erro ao carregar publicações:', error);
       toast({ title: "Erro", description: "Erro ao carregar dados do estoque.", variant: "destructive" });
@@ -109,7 +98,7 @@ const Estoque = () => {
         loadPublications();
     }, 500); // Debounce
     return () => clearTimeout(timer);
-  }, [currentPage, searchTerm, categoryFilter]);
+  }, [searchTerm, categoryFilter]);
 
   const loadMovements = async (publicationId: string) => {
     try {
@@ -278,15 +267,6 @@ const Estoque = () => {
         </CardContent>
       </Card>
       
-       {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem><PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)); }} disabled={currentPage === 1}/></PaginationItem>
-            {[...Array(totalPages)].map((_, i) => (<PaginationItem key={i}><PaginationLink href="#" isActive={currentPage === i + 1} onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }}>{i + 1}</PaginationLink></PaginationItem>)).slice(Math.max(0, currentPage-3), Math.min(totalPages, currentPage+2))}
-            <PaginationItem><PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)); }} disabled={currentPage === totalPages}/></PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
 
       {canManageStock && (
         <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>
