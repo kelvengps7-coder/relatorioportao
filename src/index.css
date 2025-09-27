@@ -1,0 +1,447 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Congregação theme with #EFEEEC primary color */
+    --background: 40 11% 95%;           /* Soft warm white using #EFEEEC theme */
+    --foreground: 0 0% 13%;             /* Deep charcoal for text */
+
+    --card: 0 0% 100%;                  /* Pure white cards for contrast */
+    --card-foreground: 0 0% 13%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 13%;
+
+    --primary: 40 11% 93%;              /* #EFEEEC as primary - your theme color */
+    --primary-foreground: 0 0% 13%;     /* Dark text on light primary */
+    --primary-variant: 40 15% 85%;      /* Slightly darker variant */
+
+    --secondary: 210 70% 56%;           /* Blue accent for highlights */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96%;               /* Very light blue-gray */
+    --muted-foreground: 215 13% 34%;
+
+    --accent: 40 20% 80%;               /* Warm accent matching theme */
+    --accent-foreground: 0 0% 13%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 11% 70%;               /* More visible borders */
+    --input: 40 11% 96%;                /* Light input backgrounds */
+    --ring: 40 15% 85%;                 /* Focus ring matching theme */
+
+    --radius: 0.5rem;                   /* Slightly more subtle corners */
+
+    /* Professional header/menu colors */
+    --header-background: 40 11% 93%;    /* #EAE9E6 - your requested menu bar color */
+    --header-foreground: 0 0% 13%;
+    --header-border: 40 11% 87%;        /* Slightly darker border for header */
+    
+    /* Brand text color - #515253 */
+    --brand-text: 240 2% 32%;           /* #515253 for titles and brand text */
+    --brand-hover: 35 12% 58%;          /* Slightly darker for hover states */
+    --menu-text: 0 0% 25%;              /* Dark text for better menu visibility */
+
+    /* Sidebar matching the professional theme */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 13%;
+    --sidebar-primary: 210 70% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 0 0% 13%;
+    --sidebar-border: 210 40% 89%;
+    --sidebar-ring: 210 70% 56%;
+
+    /* Congregação theme gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(40 11% 93%), hsl(40 15% 88%));
+    --gradient-header: linear-gradient(180deg, hsl(40 11% 95%), hsl(40 11% 93%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(40 11% 98%));
+    --gradient-subtle: linear-gradient(180deg, hsl(40 11% 97%), hsl(40 11% 95%));
+    --gradient-warm: linear-gradient(135deg, hsl(40 25% 92%), hsl(45 20% 88%));
+    
+    /* Clean, professional shadows */
+    --shadow-subtle: 0 2px 4px 0 hsl(0 0% 0% / 0.08);
+    --shadow-elegant: 0 4px 8px 0 hsl(0 0% 0% / 0.12), 0 2px 4px 0 hsl(0 0% 0% / 0.08);
+    --shadow-card: 0 6px 12px -2px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.08);
+    --shadow-header: 0 2px 6px 0 hsl(0 0% 0% / 0.12);
+    --shadow-glow: 0 0 0 1px hsl(210 70% 56% / 0.05);
+    
+    /* Transições suaves */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 13%;
+    --primary: 210 70% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-variant: 210 75% 50%;
+    --secondary: 40 11% 93%;
+    --secondary-foreground: 0 0% 13%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 13% 34%;
+    --accent: 210 70% 56%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 40% 89%;
+    --input: 210 40% 94%;
+    --ring: 210 70% 56%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --header-background: 40 11% 93%;
+    --header-foreground: 0 0% 13%;
+    --header-border: 40 11% 87%;
+    --brand-text: 240 2% 32%;
+    --brand-hover: 35 12% 58%;
+    --menu-text: 0 0% 25%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+  }
+  
+  /* Professional WOL-inspired components */
+  .wol-header {
+    background: hsl(var(--header-background));
+    border-bottom: 1px solid hsl(var(--header-border));
+    box-shadow: var(--shadow-header);
+  }
+  
+  .wol-card {
+    background: var(--gradient-card);
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-card);
+    transition: var(--transition-smooth);
+  }
+  
+  .wol-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-elegant);
+  }
+  
+  .wol-content {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+  
+  .jw-nav-item {
+    transition: var(--transition-smooth);
+    position: relative;
+  }
+  
+  .jw-nav-item::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: hsl(var(--foreground));
+    transition: width 0.3s ease;
+  }
+  
+  .jw-nav-item.active::before,
+  .jw-nav-item:hover::before {
+    width: 100%;
+  }
+
+  /* Enhanced scroll behavior for smooth and responsive scrolling */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  /* Custom scrollbar styles for WebKit browsers */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Smooth scroll behavior */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Enhanced scrolling for all elements */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* High performance scroll container */
+  .scroll-container {
+    will-change: scroll-position;
+    transform: translateZ(0);
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Enhanced button interactions */
+  .btn-hover {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .btn-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px hsl(var(--primary) / 0.2);
+  }
+
+  /* Loading states */
+  .skeleton {
+    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.1) 50%, hsl(var(--muted)) 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+  }
+
+  @keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Focus styles for accessibility */
+  .focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+  }
+
+  /* Toast improvements */
+  [data-sonner-toast] {
+    backdrop-filter: blur(8px);
+    background: hsl(var(--background) / 0.95) !important;
+    border: 1px solid hsl(var(--border));
+  }
+
+  /* Image loading optimization */
+  img[loading="lazy"] {
+    transition: opacity 0.3s ease;
+  }
+
+  img[loading="lazy"]:not([src]) {
+    opacity: 0;
+  }
+
+  /* Grid pattern for backgrounds */
+  .bg-grid-pattern {
+    background-image: linear-gradient(to right, rgba(var(--primary) / 0.05) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(var(--primary) / 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 640px) {
+    body {
+      font-size: 16px; /* Prevent zoom on iOS */
+    }
+    
+    .mobile-optimized {
+      touch-action: manipulation; /* Prevents double-tap zoom */
+    }
+    
+    /* Better tap targets for mobile */
+    button, [role="button"], input, select, textarea {
+      min-height: 44px; /* iOS recommended tap target size */
+    }
+    
+    /* Better contrast for mobile viewing */
+    .mobile-text {
+      text-shadow: 0 0 1px rgba(0,0,0,0.1);
+    }
+    
+    /* Enhanced borders for mobile */
+    .mobile-border {
+      border-width: 2px;
+    }
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    :root {
+      --border: 0 0% 50%;
+      --input: 0 0% 95%;
+    }
+  }
+
+  /* Professional component styles */
+  .pro-card {
+    @apply bg-gradient-to-br from-card via-card to-card/95 border-2 border-border/60 shadow-xl hover:shadow-2xl transition-all duration-300;
+    box-shadow: 0 8px 25px -5px hsl(var(--primary) / 0.15), 0 4px 10px -3px hsl(var(--primary) / 0.1);
+  }
+
+  .pro-card:hover {
+    @apply border-border/80 scale-[1.02];
+    box-shadow: 0 20px 40px -8px hsl(var(--primary) / 0.2), 0 8px 16px -4px hsl(var(--primary) / 0.15);
+  }
+
+  .pro-header {
+    @apply bg-gradient-to-r from-header via-header to-header/95 border-b-2 border-header-border/60 shadow-xl;
+  }
+
+  .pro-button {
+    @apply shadow-sm hover:shadow-md active:shadow-sm transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-150;
+  }
+
+  .pro-input {
+    @apply border-2 border-border/60 focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all duration-200;
+  }
+
+  .pro-table {
+    @apply border-2 border-border/60 rounded-lg overflow-hidden shadow-lg;
+  }
+
+  .pro-badge {
+    @apply shadow-md border-2 border-border/40 font-semibold;
+  }
+
+  /* Enhanced loading states */
+  .pro-skeleton {
+    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.15) 50%, hsl(var(--muted)) 75%);
+    background-size: 200% 100%;
+    animation: loading 1.8s infinite ease-in-out;
+  }
+
+  /* Professional animations */
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  .slide-in-right {
+    animation: slideInRight 0.5s ease-out forwards;
+  }
+
+  .scale-in {
+    animation: scaleIn 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Typography improvements */
+  .text-gradient {
+    @apply text-[hsl(var(--brand-text))];
+  }
+
+  .text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Enhanced focus states */
+  .focus-visible-ring {
+    @apply focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2 focus-visible:outline-none;
+  }
+
+  /* Improved scrollbars for all browsers */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.6);
+  }
+
+  /* Command item contrast fix */
+  [cmdk-item] {
+    color: hsl(var(--foreground)) !important;
+  }
+  
+  [cmdk-item]:hover,
+  [cmdk-item][data-selected="true"] {
+    color: hsl(var(--brand-text)) !important;
+    background-color: hsl(var(--accent) / 0.1) !important;
+  }
+  
+  [cmdk-input] {
+    color: hsl(var(--foreground)) !important;
+  }
+}
