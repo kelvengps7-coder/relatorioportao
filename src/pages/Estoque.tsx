@@ -23,6 +23,17 @@ import { Publication } from "@/types";
 
 const ITEMS_PER_PAGE = 30;
 
+// Função utilitária para formatar valores para CSV, tratando aspas e ponto e vírgula.
+const formatCsvValue = (value: any): string => {
+  const stringValue = String(value ?? '');
+  // Se o valor contém aspas, ponto e vírgula ou quebra de linha, envolve com aspas duplas.
+  if (/[";\n\r]/.test(stringValue)) {
+    // Escapa as aspas duplas existentes, duplicando-as.
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
 const Estoque = () => {
   const { canManageStock, canEdit, isVisualizador } = useAuth();
   const [publications, setPublications] = useState<Publication[]>([]);
@@ -33,6 +44,8 @@ const Estoque = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [categories, setCategories] = useState<string[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+
 
   // Estados dos Modais
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
@@ -145,8 +158,73 @@ const Estoque = () => {
   const loadMovements = async (publicationId: string) => { /* ... */ };
   const handleAdjustStock = async () => { /* ... */ };
   const handleViewHistory = async (publication: Publication) => { /* ... */ };
-  const handleExportCSV = async () => { /* ... */ };
   
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    toast({
+      title: "Exportando dados",
+      description: "Aguarde enquanto preparamos seu arquivo CSV...",
+    });
+
+    try {
+      // 1. Busca todos os dados filtrados, sem paginação
+      let query = supabase.from('publications').select('code,name,category,current_stock');
+      if (searchTerm) {
+        query = query.or(`name.ilike.%${searchTerm}%,code.ilike.%${searchTerm}%`);
+      }
+      if (categoryFilter !== "all") {
+        query = query.eq('category', categoryFilter);
+      }
+      const { data: allData, error } = await query.order('category, name');
+
+      if (error) throw error;
+      
+      // 2. Monta o conteúdo do CSV usando ponto e vírgula como separador
+      const headers = ['Código', 'Publicação', 'Categoria', 'Estoque Atual'];
+      const csvRows = [
+        headers.join(';'), // Cabeçalho
+        ...allData.map(pub => [
+          formatCsvValue(pub.code),
+          formatCsvValue(pub.name),
+          formatCsvValue(pub.category),
+          formatCsvValue(pub.current_stock)
+        ].join(';'))
+      ];
+      const csvContent = csvRows.join('\n');
+
+      // 3. Cria o Blob com BOM para garantir a codificação UTF-8 correta no Excel
+      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // BOM para UTF-8
+      const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+
+      if (link.href) {
+        URL.revokeObjectURL(link.href);
+      }
+      link.href = URL.createObjectURL(blob);
+      link.download = `relatorio_estoque_${new Date().toISOString().split('T')[0]}.csv`;
+      
+      // 4. Dispara o download e limpa o objeto URL
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Exportação Concluída",
+        description: `${allData.length} registros foram exportados com sucesso.`,
+      });
+
+    } catch (err) {
+      console.error('Erro ao exportar CSV:', err);
+      toast({
+        title: "Erro na Exportação",
+        description: "Não foi possível gerar o arquivo CSV. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-3 md:p-6 space-y-4 md:space-y-6">
       <div>
@@ -182,9 +260,13 @@ const Estoque = () => {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Exportar CSV
+            <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2" disabled={isExporting}>
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isExporting ? "Exportando..." : "Exportar CSV"}
             </Button>
           </div>
         </CardContent>

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings } from "lucide-react";
+import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { CodeBadge } from "@/components/ui/code-badge";
@@ -17,6 +17,15 @@ import { PublicationCover } from "@/components/PublicationCover";
 
 import { useAuth } from '@/contexts/AuthContext';
 import { Publication } from "@/types";
+
+// Função utilitária para formatar valores para CSV, tratando aspas e ponto e vírgula.
+const formatCsvValue = (value: any): string => {
+  const stringValue = String(value ?? '');
+  if (/[";\n\r]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
 
 const GerenciarSimplified = () => {
   const { canSave, canCreate, canEdit, canDelete, isVisualizador } = useAuth();
@@ -31,6 +40,7 @@ const GerenciarSimplified = () => {
   const [processing, setProcessing] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
   // Remove admin check - all users can access in public mode
 
@@ -40,6 +50,7 @@ const GerenciarSimplified = () => {
 
   const loadPublications = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('publications')
         .select('*')
@@ -115,39 +126,70 @@ const GerenciarSimplified = () => {
     }
   };
 
-  const handleExportCSV = () => {
-    const csvData = [
-      ['Código', 'Nome', 'Categoria', 'Estoque Atual'],
-      ...filteredPublications.map(pub => [
-        pub.code,
-        pub.name,
-        pub.category,
-        pub.current_stock.toString()
-      ])
-    ];
-
-    const csvContent = csvData.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `catalogo_publicacoes_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-
+  const handleExportCSV = async () => {
+    setIsExporting(true);
     toast({
-      title: "Exportação concluída",
-      description: "Catálogo exportado com sucesso.",
+      title: "Exportando dados",
+      description: "Aguarde enquanto preparamos seu arquivo CSV...",
     });
+
+    try {
+      // Os filtros são aplicados no lado do cliente, então usamos a lista já filtrada.
+      const dataToExport = filteredPublications;
+
+      const headers = ['Código', 'Publicação', 'Categoria', 'Estoque Atual'];
+      const csvRows = [
+        headers.join(';'), // Usando ponto e vírgula como separador
+        ...dataToExport.map(pub => [
+          formatCsvValue(pub.code),
+          formatCsvValue(pub.name),
+          formatCsvValue(pub.category),
+          formatCsvValue(pub.current_stock)
+        ].join(';')) // Usando ponto e vírgula como separador
+      ];
+      const csvContent = csvRows.join('\n');
+
+      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // BOM para UTF-8
+      const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+
+      if (link.href) {
+        URL.revokeObjectURL(link.href);
+      }
+      link.href = URL.createObjectURL(blob);
+      link.download = `catalogo_publicacoes_${new Date().toISOString().split('T')[0]}.csv`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Exportação Concluída",
+        description: `${dataToExport.length} registros foram exportados com sucesso.`,
+      });
+
+    } catch (err) {
+      console.error('Erro ao exportar CSV:', err);
+      toast({
+        title: "Erro na Exportação",
+        description: "Não foi possível gerar o arquivo CSV. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Filters
   const filteredPublications = publications.filter(pub => {
-    const matchesSearch = pub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         pub.code.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = pub.name.toLowerCase().includes(searchLower) ||
+                         (pub.code && pub.code.toLowerCase().includes(searchLower));
     const matchesCategory = categoryFilter === "all" || pub.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
-  const categories = Array.from(new Set(publications.map(p => p.category)));
+  const categories = Array.from(new Set(publications.map(p => p.category))).sort();
 
   // Remove admin check - public access allowed
 
@@ -156,7 +198,7 @@ const GerenciarSimplified = () => {
       <div className="max-w-7xl mx-auto p-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
-            <FolderOpen className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
             <p className="text-lg text-muted-foreground">Carregando catálogo...</p>
           </div>
         </div>
@@ -240,9 +282,13 @@ const GerenciarSimplified = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  Exportar CSV
+                <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2" disabled={isExporting}>
+                   {isExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {isExporting ? "Exportando..." : "Exportar CSV"}
                 </Button>
               </div>
             </CardContent>
