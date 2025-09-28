@@ -279,10 +279,6 @@ All colors MUST be HSL.
       font-size: 16px; /* Prevent zoom on iOS */
     }
     
-    .mobile-optimized {
-      touch-action: manipulation; /* Prevents double-tap zoom */
-    }
-    
     /* Better tap targets for mobile */
     button, [role="button"], input, select, textarea {
       min-height: 44px; /* iOS recommended tap target size */
