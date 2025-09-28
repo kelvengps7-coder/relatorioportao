@@ -103,7 +103,28 @@ const Estoque = () => {
     }
   }, [page, searchTerm, categoryFilter, toast]);
 
-  const loadCategories = async () => { /* ... (código existente sem alteração) ... */ };
+  const loadCategories = async () => {
+    try {
+      // Busca todas as publicações, mas seleciona apenas a coluna 'category'
+      const { data, error } = await supabase
+        .from('publications')
+        .select('category');
+
+      if (error) throw error;
+
+      // Extrai as categorias, remove duplicatas e ordena
+      const distinctCategories = Array.from(new Set(data.map((item: any) => item.category))).sort();
+      setCategories(distinctCategories);
+
+    } catch (error) {
+      console.error('Erro ao carregar categorias:', error);
+      toast({
+        title: "Erro de Categorias",
+        description: "Não foi possível carregar a lista de categorias para o filtro.",
+        variant: "destructive"
+      });
+    }
+  };
   
   useEffect(() => { loadCategories(); }, []);
 
@@ -128,8 +149,48 @@ const Estoque = () => {
   
   return (
     <div className="max-w-7xl mx-auto p-3 md:p-6 space-y-4 md:space-y-6">
-      {/* ... (Cabeçalho e Filtros - sem alteração) ... */}
-       <Card>
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">Estoque</h1>
+        <p className="text-muted-foreground">Controle de entrada e saída de publicações</p>
+      </div>
+      
+      {/* Filters and Actions */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-4 flex-1">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por código ou nome..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-full md:w-[200px]">
+                  <SelectValue placeholder="Todas as categorias" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as categorias</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle className="text-base md:text-lg flex items-center gap-2"><Package className="h-5 w-5" />Controle de Estoque</CardTitle></CardHeader>
         <CardContent>
           {loading ? (
