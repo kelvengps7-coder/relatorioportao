@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2, MoreVertical } from "lucide-react";
+import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2, MoreVertical, QrCode } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +38,9 @@ const GerenciarSimplified = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [publicationToDelete, setPublicationToDelete] = useState<Publication | null>(null);
+  const [qrCodePublication, setQrCodePublication] = useState<Publication | null>(null);
+  const [qrCodeDialogOpen, setQrCodeDialogOpen] = useState(false);
+  const [qrCode, setQrCode] = useState("");
   const [processing, setProcessing] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
@@ -121,6 +124,41 @@ const GerenciarSimplified = () => {
         title: "Erro",
         description: "Erro ao excluir publicação.",
         variant: "destructive"
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleSaveQrCode = async () => {
+    if (!qrCodePublication) return;
+
+    setProcessing(true);
+    try {
+      const { data, error } = await supabase
+        .from('publications')
+        .update({ codigoExternoQR: qrCode })
+        .eq('id', qrCodePublication.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setPublications(prev => prev.map(p => (p.id === qrCodePublication.id ? data : p)));
+      setQrCodeDialogOpen(false);
+      setQrCodePublication(null);
+      setQrCode("");
+
+      toast({
+        title: "Sucesso",
+        description: "Código QR Externo salvo!",
+      });
+    } catch (error) {
+      console.error('Erro ao salvar código QR:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar o código QR.",
+        variant: "destructive",
       });
     } finally {
       setProcessing(false);
@@ -363,6 +401,10 @@ const GerenciarSimplified = () => {
                                     Editar
                                   </DropdownMenuItem>
                                 )}
+                                <DropdownMenuItem onClick={() => { setQrCodePublication(pub); setQrCodeDialogOpen(true); setQrCode(pub.codigoExternoQR || ""); }}>
+                                  <QrCode className="mr-2 h-4 w-4" />
+                                  Cadastrar QR Externo
+                                </DropdownMenuItem>
                                 {canDelete && (
                                   <DropdownMenuItem onClick={() => { setPublicationToDelete(pub); setDeleteDialogOpen(true); }} className="text-destructive">
                                     <Trash2 className="mr-2 h-4 w-4" />
@@ -432,6 +474,36 @@ const GerenciarSimplified = () => {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* QR Code Dialog */}
+      <Dialog open={qrCodeDialogOpen} onOpenChange={setQrCodeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cadastro de Código QR Externo</DialogTitle>
+            <DialogDescription>
+              Insira o código alfanumérico único da publicação (ex: O7I6PW4JV).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Label htmlFor="qrCode">Código QR</Label>
+            <Input
+              id="qrCode"
+              value={qrCode}
+              onChange={(e) => setQrCode(e.target.value)}
+              placeholder="Ex: O7I6PW4JV"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQrCodeDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveQrCode} disabled={processing}>
+              {processing ? "Salvando..." : "Salvar Código"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Image Zoom Dialog */}
       <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>

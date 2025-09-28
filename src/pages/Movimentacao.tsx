@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, TrendingUp, BarChart3, Search, Truck, Send, Loader2 } from "lucide-react";
+import { ArrowUp, ArrowDown, TrendingUp, BarChart3, Search, Truck, Send, Loader2, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "@/hooks/useAuditLog";
@@ -21,6 +21,7 @@ import { UserActivityIndicator } from "@/components/UserActivityIndicator";
 import { CodeBadge } from "@/components/ui/code-badge";
 import { StockBadge } from "@/components/ui/stock-badge";
 import { Publication } from "@/types";
+import QrCodeScanner from "@/components/QrCodeScanner";
 
 interface MovementLocal {
   id: string;
@@ -45,6 +46,7 @@ const Movimentacao = () => {
   const { toast } = useToast();
   const { logAction, showSuccessMessage, showErrorMessage } = useAuditLog();
   const [searchParams] = useSearchParams();
+  const [showScanner, setShowScanner] = useState(false);
   
   // Estado para o modal de zoom da imagem
   const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
@@ -178,10 +180,29 @@ const Movimentacao = () => {
     }
   };
 
+  const handleScanSuccess = (decodedText: string) => {
+    const publication = publications.find(p => p.codigoExternoQR === decodedText);
+    if (publication) {
+      setSelectedPublication(publication.id);
+      setShowScanner(false);
+      toast({
+        title: "Sucesso",
+        description: `Publicação "${publication.name}" encontrada.`,
+      });
+    } else {
+      toast({
+        title: "Erro",
+        description: "Publicação não encontrada com o código lido. Tente buscar manualmente ou verifique o código.",
+        variant: "destructive",
+      });
+    }
+  };
+  
   const filteredPublications = publications.filter(pub =>
     pub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     pub.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    pub.category.toLowerCase().includes(searchTerm.toLowerCase())
+    pub.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (pub.codigoExternoQR && pub.codigoExternoQR.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const selectedPub = publications.find(p => p.id === selectedPublication);
@@ -225,69 +246,79 @@ const Movimentacao = () => {
             {/* Publication Selector */}
             <div className="space-y-2">
               <Label>Publicação</Label>
-              <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className="w-full justify-between h-11 text-foreground hover:text-foreground focus:text-foreground border-2 border-border/70 hover:border-border/80 bg-background hover:bg-background shadow-sm hover:shadow-md"
-                  >
-                    {selectedPub
-                      ? `[${selectedPub.code}] ${selectedPub.name}`
-                      : "Buscar publicação..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0 bg-popover border-2 border-border shadow-lg z-50" align="start">
-                  <Command>
-                    <CommandInput
-                      placeholder="Digite código ou nome da publicação..."
-                      value={searchTerm}
-                      onValueChange={setSearchTerm}
-                    />
-                    <CommandList>
-                      <CommandEmpty>Nenhuma publicação encontrada.</CommandEmpty>
-                      <CommandGroup>
-                        {filteredPublications.map((pub) => (
-                          <CommandItem
-                            key={pub.id}
-                            value={`${pub.code} ${pub.name}`}
-                            onSelect={() => {
-                              setSelectedPublication(pub.id);
-                              setOpen(false);
-                              setSearchTerm("");
-                            }}
-                            className="data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedPublication === pub.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <div className="flex items-center justify-between w-full">
-                              <div className="flex items-center gap-2">
-                                <PublicationCover 
-                                  imageUrl={pub.image_url || undefined} 
-                                  title={pub.name} 
-                                  className="w-10 h-12 flex-shrink-0"
-                                />
-                                <div>
-                                  <CodeBadge code={pub.code} className="mr-2" />
-                                  <span className="font-medium">{pub.name}</span>
-                                  <p className="text-xs text-muted-foreground mt-1">{pub.category}</p>
+              <div className="flex items-center gap-2">
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={open}
+                      className="w-full justify-between h-11 text-foreground hover:text-foreground focus:text-foreground border-2 border-border/70 hover:border-border/80 bg-background hover:bg-background shadow-sm hover:shadow-md"
+                    >
+                      {selectedPub
+                        ? `[${selectedPub.code}] ${selectedPub.name}`
+                        : "Buscar publicação..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0 bg-popover border-2 border-border shadow-lg z-50" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Digite código ou nome da publicação..."
+                        value={searchTerm}
+                        onValueChange={setSearchTerm}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma publicação encontrada.</CommandEmpty>
+                        <CommandGroup>
+                          {filteredPublications.map((pub) => (
+                            <CommandItem
+                              key={pub.id}
+                              value={`${pub.code} ${pub.name}`}
+                              onSelect={() => {
+                                setSelectedPublication(pub.id);
+                                setOpen(false);
+                                setSearchTerm("");
+                              }}
+                              className="data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedPublication === pub.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center gap-2">
+                                  <PublicationCover 
+                                    imageUrl={pub.image_url || undefined} 
+                                    title={pub.name} 
+                                    className="w-10 h-12 flex-shrink-0"
+                                  />
+                                  <div>
+                                    <CodeBadge code={pub.code} className="mr-2" />
+                                    <span className="font-medium">{pub.name}</span>
+                                    <p className="text-xs text-muted-foreground mt-1">{pub.category}</p>
+                                  </div>
                                 </div>
+                                <StockBadge stock={pub.current_stock} className="ml-2" />
                               </div>
-                              <StockBadge stock={pub.current_stock} className="ml-2" />
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <Button variant="outline" onClick={() => setShowScanner(prev => !prev)} className="h-11">
+                  <Camera className="h-5 w-5" />
+                </Button>
+              </div>
+              {showScanner && (
+                <div className="mt-4">
+                  <QrCodeScanner onScanSuccess={handleScanSuccess} />
+                </div>
+              )}
               {selectedPub && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>Estoque atual:</span>
