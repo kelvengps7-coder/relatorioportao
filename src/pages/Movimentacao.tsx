@@ -3,10 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, TrendingUp, BarChart3, Search } from "lucide-react";
+import { ArrowUp, ArrowDown, TrendingUp, BarChart3, Search, Truck, Send, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "@/hooks/useAuditLog";
@@ -45,6 +45,9 @@ const Movimentacao = () => {
   const { toast } = useToast();
   const { logAction, showSuccessMessage, showErrorMessage } = useAuditLog();
   const [searchParams] = useSearchParams();
+  
+  // Estado para o modal de zoom da imagem
+  const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
 
   useEffect(() => {
     loadData();
@@ -201,14 +204,14 @@ const Movimentacao = () => {
 
       {/* Movement Form */}
       {canManageStock ? (
-        <Card>
+        <Card className="border-2 border-border/70 shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Nova Movimentação
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Truck className="h-6 w-6" />
+              Registrar Movimentação de Estoque
             </CardTitle>
             <CardDescription>
-              Registre entradas e saídas de publicações. Todas as alterações são salvas automaticamente.
+              Selecione a publicação, informe a quantidade e o tipo de movimento.
             </CardDescription>
             <div className="mt-4">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
@@ -301,7 +304,7 @@ const Movimentacao = () => {
                 type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                placeholder="Digite a quantidade"
+                placeholder="Ex: 50"
                 min="1"
                 className="h-11"
               />
@@ -315,25 +318,25 @@ const Movimentacao = () => {
               <Button
                 onClick={() => setMovementType('entrada')}
                 variant={movementType === 'entrada' ? 'default' : 'outline'}
-                className={`flex items-center gap-2 ${
+                className={`flex-1 justify-center gap-2 text-base py-6 ${
                   movementType === 'entrada' 
-                    ? 'bg-success hover:bg-success/90 text-success-foreground' 
-                    : 'border-success text-success hover:bg-success/10'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'border-blue-500 text-blue-500 hover:bg-blue-500/10'
                 }`}
               >
-                <ArrowUp className="h-4 w-4" />
+                <ArrowUp className="h-5 w-5" />
                 Entrada
               </Button>
               <Button
                 onClick={() => setMovementType('saida')}
                 variant={movementType === 'saida' ? 'default' : 'outline'}
-                className={`flex items-center gap-2 ${
+                className={`flex-1 justify-center gap-2 text-base py-6 ${
                   movementType === 'saida' 
-                    ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' 
-                    : 'border-destructive text-destructive hover:bg-destructive/10'
+                    ? 'bg-red-600 hover:bg-red-700 text-white' 
+                    : 'border-red-500 text-red-500 hover:bg-red-500/10'
                 }`}
               >
-                <ArrowDown className="h-4 w-4" />
+                <ArrowDown className="h-5 w-5" />
                 Saída
               </Button>
             </div>
@@ -354,7 +357,7 @@ const Movimentacao = () => {
                 </p>
                 <p className="flex flex-wrap items-center gap-1">
                   <span>Movimento:</span> 
-                  <span className={`font-bold ${movementType === 'entrada' ? 'text-success' : 'text-destructive'}`}>
+                  <span className={`font-bold ${movementType === 'entrada' ? 'text-blue-500' : 'text-red-500'}`}>
                     {movementType === 'entrada' ? '+' : '-'}{quantity} unidades
                   </span>
                 </p>
@@ -373,8 +376,13 @@ const Movimentacao = () => {
           <Button 
             onClick={handleMovement} 
             disabled={processing || !selectedPublication || !quantity || parseInt(quantity) <= 0}
-            className="w-full"
+            className="w-full text-lg py-7 bg-green-600 hover:bg-green-700 text-white"
           >
+            {processing ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="mr-2 h-5 w-5" />
+            )}
             {processing ? "Registrando..." : "Registrar Movimentação"}
           </Button>
         </CardContent>
@@ -436,7 +444,8 @@ const Movimentacao = () => {
                           <PublicationCover 
                             imageUrl={movement.publications.image_url || undefined} 
                             title={movement.publications.name} 
-                            className="w-10 h-12 md:w-12 md:h-16 flex-shrink-0"
+                            className="w-10 h-12 md:w-12 md:h-16 flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => movement.publications.image_url && setZoomedImage({url: movement.publications.image_url, title: movement.publications.name})}
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1 mb-1">
@@ -450,13 +459,13 @@ const Movimentacao = () => {
                       <TableCell>
                         <Badge 
                           variant={movement.type === 'entrada' ? 'default' : 'secondary'}
-                          className={movement.type === 'entrada' ? 'bg-success text-success-foreground' : 'bg-destructive text-destructive-foreground'}
+                          className={movement.type === 'entrada' ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'}
                         >
                           {movement.type === 'entrada' ? 'Entrada' : 'Saída'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        <span className={movement.type === 'entrada' ? 'text-success' : 'text-primary'}>
+                        <span className={movement.type === 'entrada' ? 'text-blue-500' : 'text-red-500'}>
                           {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
                         </span>
                       </TableCell>
@@ -469,6 +478,27 @@ const Movimentacao = () => {
           )}
         </CardContent>
       </Card>
+      
+      {/* Image Zoom Dialog */}
+      <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Capa: {zoomedImage?.title}</DialogTitle>
+            <DialogDescription>
+              Visualização ampliada da capa da publicação.
+            </DialogDescription>
+          </DialogHeader>
+          {zoomedImage && (
+            <div className="flex justify-center py-4">
+              <img 
+                src={zoomedImage.url} 
+                alt={`Capa: ${zoomedImage.title}`}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

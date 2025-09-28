@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2 } from "lucide-react";
+import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2, MoreVertical } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { CodeBadge } from "@/components/ui/code-badge";
@@ -320,7 +321,7 @@ const GerenciarSimplified = () => {
                          <TableHead>Nome</TableHead>
                          <TableHead>Categoria</TableHead>
                          <TableHead>Estoque</TableHead>
-                         <TableHead className="text-right">Ações</TableHead>
+                         <TableHead className="text-right w-16">Ações</TableHead>
                        </TableRow>
                      </TableHeader>
                     <TableBody>
@@ -349,42 +350,30 @@ const GerenciarSimplified = () => {
                               <span className="font-medium">{pub.current_stock} unidades</span>
                             </TableCell>
                            <TableCell className="text-right">
-                             <div className="flex items-center justify-end gap-2">
-                               {canEdit && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingPublication(pub);
-                                    setEditDialogOpen(true);
-                                  }}
-                                  className="hover:bg-primary/10 hover:text-primary hover:border-primary/40"
-                                >
-                                  <Edit className="h-4 w-4 mr-1" />
-                                  Editar
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreVertical className="h-4 w-4" />
                                 </Button>
-                               )}
-                               {canDelete && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setPublicationToDelete(pub);
-                                    setDeleteDialogOpen(true);
-                                  }}
-                                  className="text-destructive hover:text-destructive 
-                                           hover:bg-destructive/10 hover:border-destructive/40"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-1" />
-                                  Excluir
-                                </Button>
-                               )}
-                               {isVisualizador && (
-                                 <span className="text-sm text-muted-foreground">
-                                   Apenas visualização
-                                 </span>
-                               )}
-                             </div>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {canEdit && (
+                                  <DropdownMenuItem onClick={() => { setEditingPublication(pub); setEditDialogOpen(true); }}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                )}
+                                {canDelete && (
+                                  <DropdownMenuItem onClick={() => { setPublicationToDelete(pub); setDeleteDialogOpen(true); }} className="text-destructive">
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Excluir
+                                  </DropdownMenuItem>
+                                )}
+                                {isVisualizador && (
+                                  <DropdownMenuItem disabled>Apenas visualização</DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                            </TableCell>
                         </TableRow>
                       ))}
