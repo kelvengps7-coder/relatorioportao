@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Package, Search, Edit, History, Download, Settings, MoreVertical, Loade
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuditLog } from "@/hooks/useAuditLog";
+import { useAuditLog } from '@/hooks/useAuditLog';
 import { useAuth } from '@/contexts/AuthContext';
 import { CodeBadge } from "@/components/ui/code-badge";
 import { StockBadge } from "@/components/ui/stock-badge";
@@ -31,7 +31,7 @@ interface MovementLocal {
 
 const Estoque = () => {
   const { canManageStock, canEdit, isVisualizador } = useAuth();
-  const [publications, setPublications] = useState<Publication[]>([]);
+  const [allPublications, setAllPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -46,41 +46,20 @@ const Estoque = () => {
   const [publicationToEdit, setPublicationToEdit] = useState<Publication | null>(null);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{url: string, title: string} | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
 
   const { toast } = useToast();
   const { logAction, showSuccessMessage, showErrorMessage } = useAuditLog();
 
-  const loadCategories = async () => {
-    try {
-      const { data, error } = await supabase.rpc('get_distinct_categories');
-      if (error) throw error;
-      setCategories(data.map((c: any) => c.category));
-    } catch (error) {
-      console.error('Erro ao carregar categorias:', error);
-    }
-  };
-
   const loadPublications = async () => {
     setLoading(true);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('publications')
-        .select('*');
-
-      if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,code.ilike.%${searchTerm}%`);
-      }
-      if (categoryFilter !== "all") {
-        query = query.eq('category', categoryFilter);
-      }
-
-      query = query.order('category, name');
-
-      const { data, error } = await query;
+        .select('*')
+        .order('category, name');
       
       if (error) throw error;
-      setPublications(data || []);
+      setAllPublications(data || []);
     } catch (error) {
       console.error('Erro ao carregar publicações:', error);
       toast({ title: "Erro", description: "Erro ao carregar dados do estoque.", variant: "destructive" });
@@ -88,17 +67,23 @@ const Estoque = () => {
       setLoading(false);
     }
   };
-
+  
   useEffect(() => {
-    loadCategories();
+    loadPublications();
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-        loadPublications();
-    }, 500); // Debounce
-    return () => clearTimeout(timer);
-  }, [searchTerm, categoryFilter]);
+  const categories = useMemo(() => Array.from(new Set(allPublications.map(p => p.category))), [allPublications]);
+
+  const filteredPublications = useMemo(() => {
+    return allPublications.filter(pub => {
+      const matchesSearch = searchTerm.trim() === '' || 
+                            pub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            pub.code.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = categoryFilter === "all" || pub.category === categoryFilter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [allPublications, searchTerm, categoryFilter]);
+
 
   const loadMovements = async (publicationId: string) => {
     try {
@@ -175,10 +160,14 @@ const Estoque = () => {
   const handleExportCSV = async () => {
      toast({ title: "Exportando...", description: "Gerando arquivo CSV..." });
     try {
-      let { data, error } = await supabase.from('publications').select('code,name,category,current_stock').order('category, name');
-      if (error) throw error;
+      const dataToExport = filteredPublications.map(pub => ({
+        code: pub.code,
+        name: pub.name,
+        category: pub.category,
+        current_stock: pub.current_stock
+      }));
       
-      const csvData = [['Código', 'Nome', 'Categoria', 'Estoque Atual'], ...(data || []).map(pub => [pub.code, pub.name, pub.category, pub.current_stock.toString()])];
+      const csvData = [['Código', 'Nome', 'Categoria', 'Estoque Atual'], ...dataToExport.map(pub => [pub.code, pub.name, pub.category, pub.current_stock.toString()])];
       const csvContent = csvData.map(row => row.join(',')).join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
@@ -186,7 +175,7 @@ const Estoque = () => {
       link.download = `estoque_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       toast({ title: "Exportação concluída", description: "Dados do estoque exportados com sucesso." });
-      logAction('export', 'publications', 'csv_export', undefined, {exported_rows: data?.length});
+      logAction('export', 'publications', 'csv_export', undefined, {exported_rows: dataToExport.length});
     } catch (error: any) {
       showErrorMessage('exportar', 'estoque', error.message);
     }
@@ -225,17 +214,19 @@ const Estoque = () => {
         <CardContent>
           {loading ? (
              <div className="text-center py-8"><Loader2 className="h-8 w-8 mx-auto animate-spin text-muted-foreground mb-4" /><p className="text-muted-foreground">Carregando estoque...</p></div>
-          ) : publications.length === 0 ? (
+          ) : filteredPublications.length === 0 ? (
             <div className="text-center py-6 md:py-8">
               <Package className="h-8 md:h-12 w-8 md:w-12 mx-auto text-muted-foreground/30 mb-3 md:mb-4" />
-              <p className="text-muted-foreground text-sm md:text-base">Nenhuma publicação encontrada.</p>
+              <p className="text-muted-foreground text-sm md:text-base">
+                 {allPublications.length === 0 ? "Nenhuma publicação cadastrada." : "Nenhuma publicação encontrada com os filtros atuais."}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Publicação</TableHead><TableHead>Categoria</TableHead><TableHead>Estoque Atual</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {publications.map((pub) => (
+                  {filteredPublications.map((pub) => (
                     <TableRow key={pub.id}>
                       <TableCell>{pub.code && <CodeBadge code={pub.code} />}</TableCell>
                       <TableCell>

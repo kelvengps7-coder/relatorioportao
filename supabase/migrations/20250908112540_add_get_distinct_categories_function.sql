@@ -1,10 +1,10 @@
-
 CREATE OR REPLACE FUNCTION get_distinct_categories()
 RETURNS TABLE(category TEXT) AS $$
 BEGIN
   RETURN QUERY
   SELECT DISTINCT p.category
-  FROM publications p
+  FROM public.publications p
+  WHERE p.category IS NOT NULL
   ORDER BY p.category;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
