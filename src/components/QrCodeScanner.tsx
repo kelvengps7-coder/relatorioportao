@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeSupportedFormats, CameraDevice } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats, CameraDevice } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X, CameraOff, SwitchCamera } from 'lucide-react';
@@ -25,6 +25,7 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
   const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(undefined);
   const [permissionError, setPermissionError] = useState(false);
 
+  // Initialize the scanner instance
   useEffect(() => {
     if (!scannerRef.current) {
       scannerRef.current = new Html5Qrcode(readerId, {
@@ -32,11 +33,15 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
       });
     }
+  }, []);
 
+  // Get available cameras and set a preferred default
+  useEffect(() => {
     Html5Qrcode.getCameras()
       .then(devices => {
         if (devices && devices.length) {
           setCameras(devices);
+          // Prefer the back camera on mobile, otherwise the first camera
           const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
           if (isMobile && backCamera) {
             setSelectedCameraId(backCamera.id);
@@ -50,48 +55,77 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
       });
   }, []);
 
+  // Start and stop the scanner when the selected camera changes
   useEffect(() => {
     if (!selectedCameraId || !scannerRef.current) {
       return;
     }
     
     const scanner = scannerRef.current;
+    let isScanning = true;
 
     const startScanner = async () => {
+      // Simplified configuration to be more compatible with mobile browsers
+      const config = {
+        fps: 15,
+        qrbox: getQrboxSize,
+        aspectRatio: 1.0,
+      };
+
       try {
         if (scanner.isScanning) {
           await scanner.stop();
         }
 
-        const config = {
-          fps: 24,
-          qrbox: getQrboxSize,
-          aspectRatio: 1.0,
-          videoConstraints: {
-              width: 1280,
-              height: 720,
-              facingMode: { exact: "environment" }
-          }
-        };
-
+        // First attempt: Use flexible constraints
         await scanner.start(
           selectedCameraId,
-          config,
+          {
+            ...config,
+            // This is the key change: flexible constraints instead of rigid ones
+            videoConstraints: {
+              facingMode: "environment"
+            }
+          },
           (decodedText) => {
-            scanner.stop();
-            toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
-            onScan(decodedText);
+            if (isScanning) {
+              isScanning = false;
+              scanner.stop().catch(console.error);
+              toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
+              onScan(decodedText);
+            }
           },
           () => { /* Ignore scan failure */ }
         );
       } catch (error) {
-        console.error("Erro ao iniciar a câmera:", error);
-        toast({
-          title: "Erro de Câmera",
-          description: "Não foi possível trocar de câmera. Tente recarregar a página.",
-          variant: "destructive"
-        });
-        setPermissionError(true);
+        console.warn("Falha ao iniciar com 'environment', tentando fallback:", error);
+        
+        // Fallback attempt: If the first one fails, try starting with minimal constraints
+        try {
+          if (scanner.isScanning) await scanner.stop();
+          
+          await scanner.start(
+              selectedCameraId,
+              config, // Start without specific videoConstraints
+              (decodedText) => {
+                  if (isScanning) {
+                      isScanning = false;
+                      scanner.stop().catch(console.error);
+                      toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
+                      onScan(decodedText);
+                    }
+                },
+                () => { /* Ignore scan failure */ }
+          );
+        } catch (fallbackError) {
+          console.error("Falha no fallback da câmera:", fallbackError);
+          toast({
+              title: "Erro de Câmera",
+              description: "Não foi possível iniciar a câmera. Verifique as permissões do navegador.",
+              variant: "destructive"
+          });
+          setPermissionError(true);
+        }
       }
     };
 
@@ -104,7 +138,7 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
     };
   }, [selectedCameraId, onScan, toast]);
 
-  const handleCameraChange = async (newCameraId: string) => {
+  const handleCameraChange = (newCameraId: string) => {
     if (scannerRef.current) {
       setSelectedCameraId(newCameraId);
     }
