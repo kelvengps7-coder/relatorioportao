@@ -11,9 +11,10 @@ interface QrCodeScannerProps {
   onClose: () => void;
 }
 
+// Calculates a responsive size for the QR code scanning box
 const getQrboxSize = () => {
   const smallerEdge = Math.min(window.innerWidth, window.innerHeight);
-  return Math.floor(smallerEdge * 0.7);
+  return Math.floor(smallerEdge * 0.7); // Use 70% of the smallest screen dimension
 };
 
 const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
@@ -25,23 +26,23 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
   const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(undefined);
   const [permissionError, setPermissionError] = useState(false);
 
-  // Initialize the scanner instance
+  // Effect to initialize the scanner instance once on mount
   useEffect(() => {
     if (!scannerRef.current) {
       scannerRef.current = new Html5Qrcode(readerId, {
-        verbose: false,
+        verbose: false, // Keep console output clean
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
       });
     }
   }, []);
 
-  // Get available cameras and set a preferred default
+  // Effect to get camera permissions and list available cameras
   useEffect(() => {
     Html5Qrcode.getCameras()
       .then(devices => {
         if (devices && devices.length) {
           setCameras(devices);
-          // Prefer the back camera on mobile, otherwise the first camera
+          // Default to the back camera on mobile, otherwise the first in the list
           const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
           if (isMobile && backCamera) {
             setSelectedCameraId(backCamera.id);
@@ -51,86 +52,53 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
         }
       })
       .catch(() => {
+        // Handle cases where camera permission is denied
         setPermissionError(true);
       });
   }, []);
 
-  // Start and stop the scanner when the selected camera changes
+  // Effect to start and manage the camera stream
   useEffect(() => {
     if (!selectedCameraId || !scannerRef.current) {
       return;
     }
     
     const scanner = scannerRef.current;
-    let isScanning = true;
-
-    const startScanner = async () => {
-      // Simplified configuration to be more compatible with mobile browsers
-      const config = {
-        fps: 15,
-        qrbox: getQrboxSize,
-        aspectRatio: 1.0,
-      };
-
-      try {
-        if (scanner.isScanning) {
-          await scanner.stop();
-        }
-
-        // First attempt: Use flexible constraints
-        await scanner.start(
-          selectedCameraId,
-          {
-            ...config,
-            // This is the key change: flexible constraints instead of rigid ones
-            videoConstraints: {
-              facingMode: "environment"
-            }
-          },
-          (decodedText) => {
-            if (isScanning) {
-              isScanning = false;
-              scanner.stop().catch(console.error);
-              toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
-              onScan(decodedText);
-            }
-          },
-          () => { /* Ignore scan failure */ }
-        );
-      } catch (error) {
-        console.warn("Falha ao iniciar com 'environment', tentando fallback:", error);
-        
-        // Fallback attempt: If the first one fails, try starting with minimal constraints
-        try {
-          if (scanner.isScanning) await scanner.stop();
-          
-          await scanner.start(
-              selectedCameraId,
-              config, // Start without specific videoConstraints
-              (decodedText) => {
-                  if (isScanning) {
-                      isScanning = false;
-                      scanner.stop().catch(console.error);
-                      toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
-                      onScan(decodedText);
-                    }
-                },
-                () => { /* Ignore scan failure */ }
-          );
-        } catch (fallbackError) {
-          console.error("Falha no fallback da câmera:", fallbackError);
-          toast({
-              title: "Erro de Câmera",
-              description: "Não foi possível iniciar a câmera. Verifique as permissões do navegador.",
-              variant: "destructive"
-          });
-          setPermissionError(true);
-        }
-      }
+    
+    // **DEFINITIVE FIX:** This is the most compatible configuration.
+    // By NOT providing 'videoConstraints', we let the browser choose the best
+    // settings, which avoids the "video recording mode" bug on mobile devices.
+    const config = {
+      fps: 10, // A lower FPS is often more stable for scanning
+      qrbox: getQrboxSize,
     };
 
-    startScanner();
+    // Stop scanning if the component is re-rendered or camera changes
+    if (scanner.isScanning) {
+      scanner.stop().catch(console.error);
+    }
+    
+    scanner.start(
+      selectedCameraId,
+      config,
+      (decodedText) => {
+        // Success callback
+        scanner.stop().catch(console.error);
+        toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
+        onScan(decodedText);
+      },
+      () => { /* Ignore scan failure callback */ }
+    ).catch((error) => {
+      console.error("Falha ao iniciar a câmera:", error);
+      toast({
+          title: "Erro de Câmera",
+          description: "Não foi possível iniciar a câmera. Verifique as permissões do navegador.",
+          variant: "destructive"
+      });
+      setPermissionError(true);
+    });
 
+    // Cleanup function to ensure the camera is stopped on component unmount
     return () => {
       if (scanner && scanner.isScanning) {
         scanner.stop().catch(console.error);
@@ -139,9 +107,7 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
   }, [selectedCameraId, onScan, toast]);
 
   const handleCameraChange = (newCameraId: string) => {
-    if (scannerRef.current) {
-      setSelectedCameraId(newCameraId);
-    }
+    setSelectedCameraId(newCameraId);
   };
 
   return (
