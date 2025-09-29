@@ -20,7 +20,16 @@ import QrCodeScanner from '@/components/QrCodeScanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { Publication } from "@/types";
 
-// Função utilitária para formatar valores para CSV, tratando aspas e ponto e vírgula.
+// Função para normalizar texto: remove acentos, caracteres especiais e converte para maiúsculas
+const normalizeText = (text: string = ''): string => {
+  return text
+    .normalize('NFD') // Normaliza para decompor caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacríticos (acentos)
+    .replace(/[^a-zA-Z0-9]/g, '') // Remove caracteres não alfanuméricos
+    .toUpperCase(); // Converte para maiúsculas
+};
+
+// Função utilitária para formatar valores para CSV
 const formatCsvValue = (value: any): string => {
   const stringValue = String(value ?? '');
   if (/[";\n\r]/.test(stringValue)) {
@@ -30,7 +39,7 @@ const formatCsvValue = (value: any): string => {
 };
 
 const GerenciarSimplified = () => {
-  const { canSave, canCreate, canEdit, canDelete, isVisualizador } = useAuth();
+  const { canCreate, canEdit, canDelete, isVisualizador } = useAuth();
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -48,7 +57,6 @@ const GerenciarSimplified = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const { toast } = useToast();
-  // Remove admin check - all users can access in public mode
 
   useEffect(() => {
     loadPublications();
@@ -76,57 +84,21 @@ const GerenciarSimplified = () => {
     }
   };
 
-  // Remove the old handleUpdatePublication - now handled by PublicationFormDialog
-
   const handleDeletePublication = async () => {
     if (!publicationToDelete) return;
-
     setProcessing(true);
-
     try {
-      // Excluir todas as movimentações associadas primeiro
-      const { error: movementsError } = await supabase
-        .from('stock_movements')
-        .delete()
-        .eq('publication_id', publicationToDelete.id);
-
-      if (movementsError) {
-        console.warn('Erro ao excluir movimentações:', movementsError);
-      }
-
-      // Excluir todos os pedidos associados
-      const { error: pedidosError } = await supabase
-        .from('pedidos')
-        .delete()
-        .eq('publicacao_id', publicationToDelete.id);
-
-      if (pedidosError) {
-        console.warn('Erro ao excluir pedidos:', pedidosError);
-      }
-
-      // Agora excluir a publicação
-      const { error } = await supabase
-        .from('publications')
-        .delete()
-        .eq('id', publicationToDelete.id);
-
+      await supabase.from('stock_movements').delete().eq('publication_id', publicationToDelete.id);
+      await supabase.from('pedidos').delete().eq('publicacao_id', publicationToDelete.id);
+      const { error } = await supabase.from('publications').delete().eq('id', publicationToDelete.id);
       if (error) throw error;
-
       setPublications(prev => prev.filter(p => p.id !== publicationToDelete.id));
       setDeleteDialogOpen(false);
       setPublicationToDelete(null);
-      
-      toast({
-        title: "Publicação excluída",
-        description: "Publicação removida do catálogo com sucesso.",
-      });
+      toast({ title: "Publicação excluída", description: "Publicação removida com sucesso." });
     } catch (error) {
       console.error('Erro ao excluir publicação:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao excluir publicação.",
-        variant: "destructive"
-      });
+      toast({ title: "Erro", description: "Erro ao excluir publicação.", variant: "destructive" });
     } finally {
       setProcessing(false);
     }
@@ -134,131 +106,96 @@ const GerenciarSimplified = () => {
 
   const handleSaveQrCode = async () => {
     if (!qrCodePublication) return;
-
     setProcessing(true);
+    
+    // Normaliza o código QR antes de salvar
+    const normalizedQrCode = normalizeText(qrCode);
+  
     try {
       const { data, error } = await supabase
         .from('publications')
-        .update({ codigoExternoQR: qrCode.toUpperCase() })
+        .update({ codigoExternoQR: normalizedQrCode })
         .eq('id', qrCodePublication.id)
         .select()
         .single();
-
+  
       if (error) throw error;
-
+  
       setPublications(prev => prev.map(p => (p.id === qrCodePublication.id ? data : p)));
       setQrCodeDialogOpen(false);
       setQrCodePublication(null);
       setQrCode("");
-
-      toast({
-        title: "Sucesso",
-        description: "Código QR Externo salvo!",
-      });
+      toast({ title: "Sucesso", description: "Código QR Externo salvo!" });
     } catch (error: any) {
       console.error('Erro ao salvar código QR:', error);
-      toast({
-        title: "Erro",
-        description: `Erro ao salvar o código QR: ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: `Erro ao salvar o código QR: ${error.message}`, variant: "destructive" });
     } finally {
       setProcessing(false);
     }
   };
+  
 
   const handleExportCSV = async () => {
     setIsExporting(true);
-    toast({
-      title: "Exportando dados",
-      description: "Aguarde enquanto preparamos seu arquivo CSV...",
-    });
-
+    toast({ title: "Exportando dados", description: "Preparando seu arquivo CSV..." });
     try {
-      // Os filtros são aplicados no lado do cliente, então usamos a lista já filtrada.
       const dataToExport = filteredPublications;
-
       const headers = ['Código', 'Publicação', 'Categoria', 'Estoque Atual'];
       const csvRows = [
-        headers.join(';'), // Usando ponto e vírgula como separador
+        headers.join(';'),
         ...dataToExport.map(pub => [
           formatCsvValue(pub.code),
           formatCsvValue(pub.name),
           formatCsvValue(pub.category),
           formatCsvValue(pub.current_stock)
-        ].join(';')) // Usando ponto e vírgula como separador
+        ].join(';'))
       ];
       const csvContent = csvRows.join('\n');
-
-      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // BOM para UTF-8
+      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
       const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
-
-      if (link.href) {
-        URL.revokeObjectURL(link.href);
-      }
       link.href = URL.createObjectURL(blob);
       link.download = `catalogo_publicacoes_${new Date().toISOString().split('T')[0]}.csv`;
-      
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      toast({
-        title: "Exportação Concluída",
-        description: `${dataToExport.length} registros foram exportados com sucesso.`,
-      });
-
+      toast({ title: "Exportação Concluída", description: `${dataToExport.length} registros exportados.` });
     } catch (err) {
       console.error('Erro ao exportar CSV:', err);
-      toast({
-        title: "Erro na Exportação",
-        description: "Não foi possível gerar o arquivo CSV. Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro na Exportação", description: "Não foi possível gerar o arquivo CSV.", variant: "destructive" });
     } finally {
       setIsExporting(false);
     }
   };
 
-  // Filters
+  // Filtro com normalização
   const filteredPublications = publications.filter(pub => {
-    const searchUpper = searchTerm.toUpperCase();
+    const normalizedSearch = normalizeText(searchTerm);
     return (
       (categoryFilter === "all" || pub.category === categoryFilter) &&
       (
-        pub.name.toUpperCase().includes(searchUpper) ||
-        (pub.code && pub.code.toUpperCase().includes(searchUpper)) ||
-        (pub.codigoExternoQR && pub.codigoExternoQR.toUpperCase().includes(searchUpper))
+        normalizeText(pub.name).includes(normalizedSearch) ||
+        normalizeText(pub.code).includes(normalizedSearch) ||
+        normalizeText(pub.codigoExternoQR).includes(normalizedSearch)
       )
     );
   });
   
-
   const categories = Array.from(new Set(publications.map(p => p.category))).sort();
-
-  // Remove admin check - public access allowed
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-lg text-muted-foreground">Carregando catálogo...</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-4 text-lg text-muted-foreground">Carregando catálogo...</p>
       </div>
     );
   }
 
-  const handleScanSuccess = (result: string | null) => {
+  const handleScanSuccess = (result: string) => {
     if (result) {
       setSearchTerm(result);
-      toast({
-        title: "Código lido!",
-        description: `Buscando por: ${result}`,
-      });
+      toast({ title: "Código Lido!", description: `Buscando por: ${result}` });
     }
     setIsScannerOpen(false);
   };
@@ -267,179 +204,119 @@ const GerenciarSimplified = () => {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Gerenciar</h1>
-        <p className="text-muted-foreground">Administração do catálogo de publicações</p>
+        <h1 className="text-3xl font-bold text-foreground">Gerenciar Catálogo</h1>
+        <p className="text-muted-foreground">Adicione, edite e organize suas publicações.</p>
       </div>
 
       <Tabs defaultValue="catalog" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="catalog" className="flex items-center gap-2">
-            <FolderOpen className="h-4 w-4" />
-            Catálogo
-          </TabsTrigger>
-          {canCreate && (
-            <TabsTrigger value="new" className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Nova Publicação
-            </TabsTrigger>
-          )}
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-1 md:w-auto">
+          <TabsTrigger value="catalog" className="flex items-center gap-2"><FolderOpen className="h-4 w-4" />Catálogo</TabsTrigger>
+          {canCreate && <TabsTrigger value="new" className="flex items-center gap-2"><Plus className="h-4 w-4" />Nova Publicação</TabsTrigger>}
         </TabsList>
 
         {canCreate && (
-          <TabsContent value="new" className="space-y-6">
-            <Card>
+          <TabsContent value="new">
+            <Card className="mt-6">
               <CardHeader>
-                <CardTitle>Nova Publicação</CardTitle>
-                <CardDescription>Adicione uma nova publicação ao catálogo</CardDescription>
+                <CardTitle>Adicionar Nova Publicação</CardTitle>
+                <CardDescription>Clique no botão abaixo para abrir o formulário de cadastro.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  onClick={() => setShowNewForm(true)} 
-                  className="w-full sm:w-auto"
-                  size="lg"
-                >
+              <CardContent>
+                <Button onClick={() => setShowNewForm(true)} size="lg">
                   <Plus className="h-4 w-4 mr-2" />
                   Adicionar Publicação
                 </Button>
-                <p className="text-sm text-muted-foreground">
-                  ✅ Sistema reorganizado com {publications.length} publicações por categoria. 
-                  Use o botão acima para adicionar novas publicações ou edite as existentes na aba Catálogo.
-                </p>
               </CardContent>
             </Card>
           </TabsContent>
         )}
 
-        <TabsContent value="catalog" className="space-y-6">
-          {/* Filters and Actions */}
+        <TabsContent value="catalog" className="space-y-6 mt-6">
           <Card>
             <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="flex flex-col md:flex-row gap-4 flex-1">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar por código ou nome..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                     <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 h-7 w-7"
-                      onClick={() => setIsScannerOpen(true)}
-                    >
-                      <Camera className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="w-full md:w-[200px]">
-                      <SelectValue placeholder="Todas as categorias" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas as categorias</SelectItem>
-                      {categories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por código, nome ou QR..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setIsScannerOpen(true)}
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2" disabled={isExporting}>
-                   {isExporting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                  {isExporting ? "Exportando..." : "Exportar CSV"}
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full md:w-[200px]">
+                    <SelectValue placeholder="Todas as categorias" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
+                    {categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleExportCSV} variant="outline" className="w-full md:w-auto" disabled={isExporting}>
+                  {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                  Exportar CSV
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Publications Table */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FolderOpen className="h-5 w-5" />
-                Catálogo de Publicações
-              </CardTitle>
+              <CardTitle>Lista de Publicações</CardTitle>
             </CardHeader>
             <CardContent>
               {filteredPublications.length === 0 ? (
                 <div className="text-center py-8">
                   <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground">
-                    {publications.length === 0 ? "Nenhuma publicação cadastrada ainda." : "Nenhuma publicação encontrada com os filtros aplicados."}
-                  </p>
+                  <p className="text-muted-foreground">Nenhuma publicação encontrada.</p>
                 </div>
               ) : (
                 <div className="rounded-lg border">
                    <Table>
                      <TableHeader>
                        <TableRow>
-                         <TableHead className="w-16">Capa</TableHead>
+                         <TableHead className="w-16 hidden md:table-cell">Capa</TableHead>
                          <TableHead>Código</TableHead>
                          <TableHead>Nome</TableHead>
-                         <TableHead>Categoria</TableHead>
-                         <TableHead>Estoque</TableHead>
-                         <TableHead className="text-right w-16">Ações</TableHead>
+                         <TableHead className="hidden sm:table-cell">Categoria</TableHead>
+                         <TableHead className="hidden sm:table-cell">Estoque</TableHead>
+                         <TableHead className="text-right">Ações</TableHead>
                        </TableRow>
                      </TableHeader>
                     <TableBody>
-                        {filteredPublications.map((pub) => (
-                          <TableRow key={pub.id} className="hover:bg-secondary/50 transition-colors">
-                             <TableCell>
-                               <PublicationCover 
-                                 imageUrl={pub.image_url} 
-                                 title={pub.name}
-                                 className="w-12 h-16 cursor-pointer hover:scale-105 transition-transform"
-                                 onClick={() => pub.image_url && setZoomedImage({url: pub.image_url, title: pub.name})}
-                               />
-                             </TableCell>
-                            <TableCell>
-                              {pub.code && <CodeBadge code={pub.code} />}
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-medium">{pub.name}</span>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                                {pub.category}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-medium">{pub.current_stock} unidades</span>
-                            </TableCell>
-                           <TableCell className="text-right">
+                      {filteredPublications.map((pub) => (
+                        <TableRow key={pub.id}>
+                           <TableCell className="hidden md:table-cell">
+                             <PublicationCover 
+                               imageUrl={pub.image_url} 
+                               title={pub.name}
+                               className="w-12 h-16 cursor-pointer"
+                               onClick={() => pub.image_url && setZoomedImage({url: pub.image_url, title: pub.name})}
+                             />
+                           </TableCell>
+                          <TableCell><CodeBadge code={pub.code || 'N/A'} /></TableCell>
+                          <TableCell className="font-medium">{pub.name}</TableCell>
+                          <TableCell className="hidden sm:table-cell"><Badge variant="secondary">{pub.category}</Badge></TableCell>
+                          <TableCell className="hidden sm:table-cell">{pub.current_stock}</TableCell>
+                          <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
+                                <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                {canEdit && (
-                                  <DropdownMenuItem onClick={() => { setEditingPublication(pub); setEditDialogOpen(true); }}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Editar
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem onClick={() => { setQrCodePublication(pub); setQrCodeDialogOpen(true); setQrCode(pub.codigoExternoQR || ""); }}>
-                                  <QrCode className="mr-2 h-4 w-4" />
-                                  Cadastrar QR Externo
-                                </DropdownMenuItem>
-                                {canDelete && (
-                                  <DropdownMenuItem onClick={() => { setPublicationToDelete(pub); setDeleteDialogOpen(true); }} className="text-destructive">
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Excluir
-                                  </DropdownMenuItem>
-                                )}
-                                {isVisualizador && (
-                                  <DropdownMenuItem disabled>Apenas visualização</DropdownMenuItem>
-                                )}
+                                {canEdit && <DropdownMenuItem onClick={() => { setEditingPublication(pub); setEditDialogOpen(true); }}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>}
+                                <DropdownMenuItem onClick={() => { setQrCodePublication(pub); setQrCodeDialogOpen(true); setQrCode(pub.codigoExternoQR || ""); }}><QrCode className="mr-2 h-4 w-4" />Cadastrar QR</DropdownMenuItem>
+                                {canDelete && <DropdownMenuItem onClick={() => { setPublicationToDelete(pub); setDeleteDialogOpen(true); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem>}
+                                {isVisualizador && <DropdownMenuItem disabled>Apenas visualização</DropdownMenuItem>}
                               </DropdownMenuContent>
                             </DropdownMenu>
                            </TableCell>
@@ -454,108 +331,42 @@ const GerenciarSimplified = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Publication Form Dialogs */}
-      {canCreate && (
-        <PublicationFormDialog
-          open={showNewForm}
-          onOpenChange={setShowNewForm}
-          onSuccess={loadPublications}
-        />
-      )}
+      {/* Dialogs */}
+      {canCreate && <PublicationFormDialog open={showNewForm} onOpenChange={setShowNewForm} onSuccess={loadPublications} />}
+      {canEdit && <PublicationFormDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} publication={editingPublication} onSuccess={() => { loadPublications(); setEditDialogOpen(false); }} />}
       
-      {canEdit && (
-        <PublicationFormDialog
-          open={editDialogOpen}
-          onOpenChange={(open) => {
-            setEditDialogOpen(open);
-            if (!open) setEditingPublication(null);
-          }}
-          publication={editingPublication}
-          onSuccess={loadPublications}
-        />
-      )}
-
-      {/* Delete Dialog */}
       {canDelete && (
         <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Excluir Publicação</DialogTitle>
-              <DialogDescription>
-                Tem certeza de que deseja excluir "{publicationToDelete?.name}"? Esta ação não pode ser desfeita.
-              </DialogDescription>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Excluir Publicação</DialogTitle><DialogDescription>Tem certeza que deseja excluir "{publicationToDelete?.name}"? Esta ação é irreversível.</DialogDescription></DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={handleDeletePublication} 
-                disabled={processing}
-              >
-                {processing ? "Excluindo..." : "Excluir"}
-              </Button>
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
+              <Button variant="destructive" onClick={handleDeletePublication} disabled={processing}>{processing ? "Excluindo..." : "Excluir"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* QR Code Dialog */}
       <Dialog open={qrCodeDialogOpen} onOpenChange={setQrCodeDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cadastro de Código QR Externo</DialogTitle>
-            <DialogDescription>
-              Insira o código alfanumérico único da publicação (ex: O7I6PW4JV).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
+          <DialogHeader><DialogTitle>Cadastro de Código QR Externo</DialogTitle><DialogDescription>Insira o código único da publicação.</DialogDescription></DialogHeader>
+          <div className="space-y-2 py-4">
             <Label htmlFor="qrCode">Código QR</Label>
-            <Input
-              id="qrCode"
-              value={qrCode}
-              onChange={(e) => setQrCode(e.target.value)}
-              placeholder="Ex: O7I6PW4JV"
-            />
+            <Input id="qrCode" value={qrCode} onChange={(e) => setQrCode(e.target.value)} placeholder="Ex: A1B2C3D4"/>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setQrCodeDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveQrCode} disabled={processing}>
-              {processing ? "Salvando..." : "Salvar Código"}
-            </Button>
+            <Button variant="outline" onClick={() => setQrCodeDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveQrCode} disabled={processing}>{processing ? "Salvando..." : "Salvar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
-      {isScannerOpen && (
-        <QrCodeScanner
-          onScan={handleScanSuccess}
-          onClose={() => setIsScannerOpen(false)}
-        />
-      )}
+      {isScannerOpen && <QrCodeScanner onScan={handleScanSuccess} onClose={() => setIsScannerOpen(false)} />}
 
-
-      {/* Image Zoom Dialog */}
       <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Capa: {zoomedImage?.title}</DialogTitle>
-            <DialogDescription>
-              Visualização em tamanho ampliado da capa da publicação
-            </DialogDescription>
-          </DialogHeader>
-          {zoomedImage && (
-            <div className="flex justify-center">
-              <img 
-                src={zoomedImage.url} 
-                alt={`Capa: ${zoomedImage.title}`}
-                className="max-w-full max-h-[70vh] object-contain rounded-lg"
-              />
-            </div>
-          )}
+          <DialogHeader><DialogTitle>Capa: {zoomedImage?.title}</DialogTitle></DialogHeader>
+          {zoomedImage && <img src={zoomedImage.url} alt={`Capa: ${zoomedImage.title}`} className="max-w-full max-h-[70vh] object-contain rounded-lg"/>}
         </DialogContent>
       </Dialog>
     </div>
