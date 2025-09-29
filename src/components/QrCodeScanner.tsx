@@ -46,11 +46,6 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
           if (backCamera) simplifiedCameras.push({ id: backCamera.id, label: 'Câmera Traseira' });
           if (frontCamera) simplifiedCameras.push({ id: frontCamera.id, label: 'Câmera Frontal' });
           
-          // Se não encontrou por nome, adiciona todas como fallback
-          if (simplifiedCameras.length === 0) {
-              devices.forEach(d => simplifiedCameras.push({ id: d.id, label: d.label || `Câmera ${d.id}`}));
-          }
-
           setCameras(simplifiedCameras);
           
           // --- PRIORIDADE TRASEIRA GARANTIDA ---
