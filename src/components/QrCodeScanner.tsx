@@ -87,7 +87,10 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
       (decodedText) => {
         onScan(decodedText);
       }, 
-      () => {}
+      (errorMessage) => {
+        // Log de depuração para entender falhas de leitura
+        console.debug("QR Scanner Error:", errorMessage);
+      }
     ).catch(() => {
       setError("Não foi possível iniciar esta câmera.");
     });
