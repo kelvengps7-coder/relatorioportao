@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2, MoreVertical, QrCode, Camera } from "lucide-react";
+import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2, MoreVertical, QrCode, Camera, Link } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,16 +20,25 @@ import QrCodeScanner from '@/components/QrCodeScanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { Publication } from "@/types";
 
-// Função para normalizar texto: remove acentos, caracteres especiais e converte para maiúsculas
+// Função para normalizar texto (usada para busca geral)
 const normalizeText = (text: string = ''): string => {
+  if (!text) return '';
   return text
-    .normalize('NFD') // Normaliza para decompor caracteres acentuados
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacríticos (acentos)
-    .replace(/[^a-zA-Z0-9]/g, '') // Remove caracteres não alfanuméricos
-    .toUpperCase(); // Converte para maiúsculas
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
 };
 
-// Função utilitária para formatar valores para CSV
+// Função para validar se uma string é uma URL
+const isValidUrl = (urlString: string): boolean => {
+  try {
+    new URL(urlString);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
 const formatCsvValue = (value: any): string => {
   const stringValue = String(value ?? '');
   if (/[";\n\r]/.test(stringValue)) {
@@ -48,9 +57,12 @@ const GerenciarSimplified = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [publicationToDelete, setPublicationToDelete] = useState<Publication | null>(null);
-  const [qrCodePublication, setQrCodePublication] = useState<Publication | null>(null);
-  const [qrCodeDialogOpen, setQrCodeDialogOpen] = useState(false);
-  const [qrCode, setQrCode] = useState("");
+  
+  // Novo estado para o diálogo de URL
+  const [urlPublication, setUrlPublication] = useState<Publication | null>(null);
+  const [urlDialogOpen, setUrlDialogOpen] = useState(false);
+  const [publicationUrl, setPublicationUrl] = useState("");
+
   const [processing, setProcessing] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
@@ -104,50 +116,53 @@ const GerenciarSimplified = () => {
     }
   };
 
-  const handleSaveQrCode = async () => {
-    if (!qrCodePublication) return;
+  const handleSaveUrl = async () => {
+    if (!urlPublication) return;
+    
+    if (!isValidUrl(publicationUrl)) {
+      toast({ title: "URL Inválida", description: "Por favor, insira uma URL válida.", variant: "destructive" });
+      return;
+    }
+    
     setProcessing(true);
     
-    // Normaliza o código QR antes de salvar
-    const normalizedQrCode = normalizeText(qrCode);
-  
     try {
       const { data, error } = await supabase
         .from('publications')
-        .update({ codigoExternoQR: normalizedQrCode })
-        .eq('id', qrCodePublication.id)
+        .update({ urlDoFabricante: publicationUrl })
+        .eq('id', urlPublication.id)
         .select()
         .single();
   
       if (error) throw error;
   
-      setPublications(prev => prev.map(p => (p.id === qrCodePublication.id ? data : p)));
-      setQrCodeDialogOpen(false);
-      setQrCodePublication(null);
-      setQrCode("");
-      toast({ title: "Sucesso", description: "Código QR Externo salvo!" });
+      setPublications(prev => prev.map(p => (p.id === urlPublication.id ? data : p)));
+      setUrlDialogOpen(false);
+      setUrlPublication(null);
+      setPublicationUrl("");
+      toast({ title: "Sucesso", description: "URL do Fabricante salva com sucesso!" });
     } catch (error: any) {
-      console.error('Erro ao salvar código QR:', error);
-      toast({ title: "Erro", description: `Erro ao salvar o código QR: ${error.message}`, variant: "destructive" });
+      console.error('Erro ao salvar URL:', error);
+      toast({ title: "Erro", description: `Erro ao salvar a URL: ${error.message}`, variant: "destructive" });
     } finally {
       setProcessing(false);
     }
   };
-  
 
   const handleExportCSV = async () => {
     setIsExporting(true);
     toast({ title: "Exportando dados", description: "Preparando seu arquivo CSV..." });
     try {
       const dataToExport = filteredPublications;
-      const headers = ['Código', 'Publicação', 'Categoria', 'Estoque Atual'];
+      const headers = ['Código', 'Publicação', 'Categoria', 'Estoque Atual', 'URL do Fabricante'];
       const csvRows = [
         headers.join(';'),
         ...dataToExport.map(pub => [
           formatCsvValue(pub.code),
           formatCsvValue(pub.name),
           formatCsvValue(pub.category),
-          formatCsvValue(pub.current_stock)
+          formatCsvValue(pub.current_stock),
+          formatCsvValue(pub.urlDoFabricante)
         ].join(';'))
       ];
       const csvContent = csvRows.join('\n');
@@ -168,7 +183,6 @@ const GerenciarSimplified = () => {
     }
   };
 
-  // Filtro com normalização
   const filteredPublications = publications.filter(pub => {
     const normalizedSearch = normalizeText(searchTerm);
     return (
@@ -176,13 +190,41 @@ const GerenciarSimplified = () => {
       (
         normalizeText(pub.name).includes(normalizedSearch) ||
         normalizeText(pub.code).includes(normalizedSearch) ||
-        normalizeText(pub.codigoExternoQR).includes(normalizedSearch)
+        (pub.urlDoFabricante && normalizeText(pub.urlDoFabricante).includes(normalizedSearch))
       )
     );
   });
   
   const categories = Array.from(new Set(publications.map(p => p.category))).sort();
 
+  const handleScanSuccess = (scannedUrl: string) => {
+    setIsScannerOpen(false);
+    
+    if (!isValidUrl(scannedUrl)) {
+      toast({ title: "QR Code Inválido", description: "O conteúdo lido não é uma URL válida.", variant: "destructive" });
+      setSearchTerm(scannedUrl); // Coloca o conteúdo inválido na busca para depuração
+      return;
+    }
+  
+    const foundPublication = publications.find(pub => pub.urlDoFabricante === scannedUrl);
+  
+    if (foundPublication) {
+      setEditingPublication(foundPublication);
+      setEditDialogOpen(true);
+      toast({
+        title: "Publicação Encontrada!",
+        description: `Editando "${foundPublication.name}".`,
+      });
+    } else {
+      setSearchTerm(scannedUrl);
+      toast({
+        title: "Publicação Não Encontrada",
+        description: "Nenhuma publicação corresponde à URL lida. Verifique se a URL está cadastrada.",
+        variant: "destructive",
+      });
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -192,17 +234,8 @@ const GerenciarSimplified = () => {
     );
   }
 
-  const handleScanSuccess = (result: string) => {
-    if (result) {
-      setSearchTerm(result);
-      toast({ title: "Código Lido!", description: `Buscando por: ${result}` });
-    }
-    setIsScannerOpen(false);
-  };
-
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Gerenciar Catálogo</h1>
         <p className="text-muted-foreground">Adicione, edite e organize suas publicações.</p>
@@ -238,7 +271,7 @@ const GerenciarSimplified = () => {
                 <div className="relative flex-1 w-full">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por código, nome ou QR..."
+                    placeholder="Buscar por código, nome ou URL..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -314,7 +347,7 @@ const GerenciarSimplified = () => {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 {canEdit && <DropdownMenuItem onClick={() => { setEditingPublication(pub); setEditDialogOpen(true); }}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>}
-                                <DropdownMenuItem onClick={() => { setQrCodePublication(pub); setQrCodeDialogOpen(true); setQrCode(pub.codigoExternoQR || ""); }}><QrCode className="mr-2 h-4 w-4" />Cadastrar QR</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setUrlPublication(pub); setUrlDialogOpen(true); setPublicationUrl(pub.urlDoFabricante || ""); }}><Link className="mr-2 h-4 w-4" />Cadastrar URL</DropdownMenuItem>
                                 {canDelete && <DropdownMenuItem onClick={() => { setPublicationToDelete(pub); setDeleteDialogOpen(true); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem>}
                                 {isVisualizador && <DropdownMenuItem disabled>Apenas visualização</DropdownMenuItem>}
                               </DropdownMenuContent>
@@ -347,16 +380,17 @@ const GerenciarSimplified = () => {
         </Dialog>
       )}
 
-      <Dialog open={qrCodeDialogOpen} onOpenChange={setQrCodeDialogOpen}>
+      {/* Diálogo de URL do Fabricante */}
+      <Dialog open={urlDialogOpen} onOpenChange={setUrlDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Cadastro de Código QR Externo</DialogTitle><DialogDescription>Insira o código único da publicação.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>URL do Fabricante</DialogTitle><DialogDescription>Insira a URL completa obtida do QR Code do fabricante.</DialogDescription></DialogHeader>
           <div className="space-y-2 py-4">
-            <Label htmlFor="qrCode">Código QR</Label>
-            <Input id="qrCode" value={qrCode} onChange={(e) => setQrCode(e.target.value)} placeholder="Ex: A1B2C3D4"/>
+            <Label htmlFor="publicationUrl">URL do Fabricante</Label>
+            <Input id="publicationUrl" value={publicationUrl} onChange={(e) => setPublicationUrl(e.target.value)} placeholder="https://exemplo.com/produto/123"/>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setQrCodeDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveQrCode} disabled={processing}>{processing ? "Salvando..." : "Salvar"}</Button>
+            <Button variant="outline" onClick={() => setUrlDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveUrl} disabled={processing}>{processing ? "Salvando..." : "Salvar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

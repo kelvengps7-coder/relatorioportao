@@ -1,60 +1,46 @@
-// Central type definitions for the application
-
-export type UserRole = 'admin' | 'servo de balcao' | 'visualizador';
-
 export interface Publication {
-  id: string;
+  id: number;
   code: string;
   name: string;
-  current_stock: number;
   category: string;
-  total_entries: number;
-  total_exits: number;
+  current_stock: number;
   image_url?: string;
-  created_at: string;
-  updated_at: string;
+  urlDoFabricante?: string; // Campo único para a URL do QR Code
 }
 
-export interface Movement {
-  id: string;
-  publication_id: string;
-  type: string;
+export interface StockMovement {
+  id: number;
+  publication_id: number;
+  type: 'entrada' | 'saida';
   quantity: number;
-  motivo?: string;
+  responsible: string;
   created_at: string;
-  publications?: Publication;
+  publications: {
+    name: string;
+    code: string;
+  };
 }
 
 export interface Pedido {
-  id: string;
-  irmao: string;
-  publicacao_id: string;
+  id: number;
+  publicacao_id: number;
   quantidade: number;
-  data_pedido: string;
-  enviado: boolean;
-  entregue: boolean;
+  solicitante: string;
   created_at: string;
-  updated_at: string;
-  publications?: Publication;
+  retirado_por?: string;
+  retirado_em?: string;
+  publicacoes: {
+    name: "string";
+    code: "string";
+    current_stock: "number";
+  }
 }
 
-export interface PublicationFormData {
-  code: string;
-  name: string;
-  category: string;
-  current_stock: number;
-  image_url?: string;
-}
-
+// Lista de categorias de publicações
 export const PUBLICATION_CATEGORIES = [
-  'Bíblias',
-  'Brochuras e Livretos',
-  'CARTAZ',
-  'Formulários',
-  'Kit de Ferramentas de Ensino',
-  'Livros',
-  'Revistas — Despertai!',
-  'Revistas — Sentinela'
-] as const;
-
-export type PublicationCategory = typeof PUBLICATION_CATEGORIES[number];
+  "Livros",
+  "Revistas",
+  "Folhetos",
+  "Bíblias",
+  "Outros",
+];

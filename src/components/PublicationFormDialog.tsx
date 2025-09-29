@@ -9,7 +9,7 @@ import { useAuditLog } from "@/hooks/useAuditLog";
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from "@/integrations/supabase/client";
 import { Publication, PUBLICATION_CATEGORIES } from "@/types";
-import { Upload, X, Image } from "lucide-react";
+import { Upload, X, Image, Link } from "lucide-react";
 
 interface PublicationFormDialogProps {
   open: boolean;
@@ -18,6 +18,15 @@ interface PublicationFormDialogProps {
   onSuccess: () => void;
 }
 
+const isValidUrl = (urlString: string): boolean => {
+  if (!urlString) return true; // Allow empty URL
+  try {
+    new URL(urlString);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
 
 export const PublicationFormDialog = ({ 
   open, 
@@ -27,25 +36,26 @@ export const PublicationFormDialog = ({
 }: PublicationFormDialogProps) => {
   const { canSave, isVisualizador } = useAuth();
   
-  // Bloquear completamente para visualizadores
   if (isVisualizador) {
     return null;
   }
+
   const [formData, setFormData] = useState({
-    code: publication?.code || "",
-    name: publication?.name || "",
-    category: publication?.category || "",
-    current_stock: publication?.current_stock || 0,
-    image_url: publication?.image_url || ""
+    code: "",
+    name: "",
+    category: "",
+    current_stock: 0,
+    image_url: "",
+    urlDoFabricante: ""
   });
+  
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { logAction, showSuccessMessage, showErrorMessage } = useAuditLog();
+  const { logAction, showSuccessMessage } = useAuditLog();
 
-  // Atualizar formData quando publication mudar
   useEffect(() => {
     if (publication) {
       setFormData({
@@ -53,7 +63,8 @@ export const PublicationFormDialog = ({
         name: publication.name || "",
         category: publication.category || "",
         current_stock: publication.current_stock || 0,
-        image_url: publication.image_url || ""
+        image_url: publication.image_url || "",
+        urlDoFabricante: publication.urlDoFabricante || ""
       });
       setImagePreview(publication.image_url || null);
     } else {
@@ -62,43 +73,28 @@ export const PublicationFormDialog = ({
         name: "",
         category: "",
         current_stock: 0,
-        image_url: ""
+        image_url: "",
+        urlDoFabricante: ""
       });
       setImagePreview(null);
     }
     setImageFile(null);
-  }, [publication]);
+  }, [publication, open]);
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Verificar tipo de arquivo
       if (!file.type.startsWith('image/')) {
-        toast({
-          title: "Erro",
-          description: "Por favor, selecione apenas arquivos de imagem.",
-          variant: "destructive"
-        });
+        toast({ title: "Erro", description: "Por favor, selecione apenas arquivos de imagem.", variant: "destructive" });
         return;
       }
-
-      // Verificar tamanho (máximo 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "Erro",
-          description: "A imagem deve ter no máximo 5MB.",
-          variant: "destructive"
-        });
+        toast({ title: "Erro", description: "A imagem deve ter no máximo 5MB.", variant: "destructive" });
         return;
       }
-
       setImageFile(file);
-      
-      // Criar preview
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
+      reader.onload = (e) => setImagePreview(e.target?.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -116,20 +112,9 @@ export const PublicationFormDialog = ({
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `publication-cover-${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('publication-covers')
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error('Erro no upload:', uploadError);
-        return null;
-      }
-
-      const { data } = supabase.storage
-        .from('publication-covers')
-        .getPublicUrl(fileName);
-
+      const { error: uploadError } = await supabase.storage.from('publication-covers').upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('publication-covers').getPublicUrl(fileName);
       return data.publicUrl;
     } catch (error) {
       console.error('Erro no upload da imagem:', error);
@@ -139,11 +124,11 @@ export const PublicationFormDialog = ({
 
   const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.category) {
-      toast({
-        title: "Erro",
-        description: "Por favor, preencha todos os campos obrigatórios.",
-        variant: "destructive"
-      });
+      toast({ title: "Erro", description: "Por favor, preencha os campos obrigatórios (Descrição e Categoria).", variant: "destructive" });
+      return;
+    }
+    if (!isValidUrl(formData.urlDoFabricante)) {
+      toast({ title: "URL Inválida", description: "Por favor, insira uma URL do fabricante válida ou deixe o campo em branco.", variant: "destructive" });
       return;
     }
 
@@ -151,63 +136,37 @@ export const PublicationFormDialog = ({
 
     try {
       let imageUrl = formData.image_url;
-
-      // Upload da nova imagem se houver
       if (imageFile) {
-        const uploadedUrl = await uploadImage(imageFile);
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl;
-        } else {
-          toast({
-            title: "Aviso",
-            description: "Erro ao fazer upload da imagem. Publicação será salva sem a capa.",
-            variant: "destructive"
-          });
-        }
+        imageUrl = await uploadImage(imageFile) || imageUrl;
       }
+
+      const publicationData = { ...formData, image_url: imageUrl };
 
       if (publication) {
         // Editar publicação existente
-        const { error } = await supabase
-          .from('publications')
-          .update({
-            code: formData.code,
-            name: formData.name,
-            category: formData.category,
-            current_stock: formData.current_stock,
-            image_url: imageUrl
-          })
-          .eq('id', publication.id);
-
+        const { error } = await supabase.from('publications').update(publicationData).eq('id', publication.id);
         if (error) throw error;
-
-        await logAction('update', 'publications', publication.id, publication, { ...formData, image_url: imageUrl });
+        await logAction('update', 'publications', publication.id, publication, publicationData);
         showSuccessMessage('update', 'Publicação');
       } else {
-        // Criar nova publicação
-        const { error } = await supabase
-          .from('publications')
-          .insert({
-            code: formData.code,
-            name: formData.name,
-            category: formData.category,
-            current_stock: formData.current_stock,
-            total_entries: formData.current_stock,
-            total_exits: 0,
-            image_url: imageUrl
-          });
-
+        // Criar nova publicação - CORRIGIDO
+        const { error } = await supabase.from('publications').insert({
+          code: publicationData.code,
+          name: publicationData.name,
+          category: publicationData.category,
+          current_stock: publicationData.current_stock,
+          image_url: publicationData.image_url,
+          urlDoFabricante: publicationData.urlDoFabricante, // Garantir que a URL seja salva
+          total_entries: publicationData.current_stock,
+          total_exits: 0,
+        });
         if (error) throw error;
-
-        await logAction('create', 'publications', null, null, { ...formData, image_url: imageUrl });
+        await logAction('create', 'publications', null, null, publicationData);
         showSuccessMessage('create', 'Publicação');
       }
 
       onSuccess();
       onOpenChange(false);
-      setFormData({ code: "", name: "", category: "", current_stock: 0, image_url: "" });
-      setImageFile(null);
-      setImagePreview(null);
     } catch (error: any) {
       console.error('Erro ao salvar publicação:', error);
       toast({
@@ -224,123 +183,63 @@ export const PublicationFormDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>
-            {publication ? "Editar Publicação" : "Nova Publicação"}
-          </DialogTitle>
-          <DialogDescription>
-            {publication 
-              ? "Faça as alterações necessárias nos dados da publicação." 
-              : "Preencha os dados da nova publicação."
-            }
-          </DialogDescription>
+          <DialogTitle>{publication ? "Editar Publicação" : "Nova Publicação"}</DialogTitle>
+          <DialogDescription>{publication ? "Faça as alterações necessárias." : "Preencha os dados da nova publicação."}</DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <div className="grid gap-4 py-4">
           <div>
             <Label htmlFor="name">Descrição *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Nome da publicação"
-            />
+            <Input id="name" value={formData.name} onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))} placeholder="Nome da publicação" />
           </div>
           
           <div>
             <Label htmlFor="code">Código</Label>
-            <Input
-              id="code"
-              value={formData.code}
-              onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
-              placeholder="Código da publicação (opcional)"
-              className="font-mono"
-            />
+            <Input id="code" value={formData.code} onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))} placeholder="Código interno (opcional)" className="font-mono" />
+          </div>
+
+          <div>
+            <Label htmlFor="urlDoFabricante">URL do Fabricante (QR Code)</Label>
+            <div className="relative">
+              <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input id="urlDoFabricante" value={formData.urlDoFabricante} onChange={(e) => setFormData(prev => ({ ...prev, urlDoFabricante: e.target.value }))} placeholder="https://... (opcional)" className="pl-10" />
+            </div>
           </div>
           
           <div>
             <Label htmlFor="category">Categoria *</Label>
-            <Select
-              value={formData.category}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
+            <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
+              <SelectTrigger><SelectValue placeholder="Selecione uma categoria" /></SelectTrigger>
               <SelectContent>
-                {PUBLICATION_CATEGORIES.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
+                {PUBLICATION_CATEGORIES.map((category) => (<SelectItem key={category} value={category}>{category}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
 
           <div>
             <Label htmlFor="image">Capa da Publicação</Label>
-            <div className="space-y-4">
-              {imagePreview && (
-                <div className="relative inline-block">
-                  <img 
-                    src={imagePreview} 
-                    alt="Preview da capa" 
-                    className="w-24 h-32 object-cover rounded-lg border border-border"
-                  />
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full"
-                    onClick={removeImage}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+            <div className="flex items-center gap-4">
+              {imagePreview ? (
+                <div className="relative">
+                  <img src={imagePreview} alt="Preview" className="w-20 h-28 object-cover rounded-md border" />
+                  <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={removeImage}><X className="h-4 w-4" /></Button>
                 </div>
-              )}
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2"
-                >
-                  {imagePreview ? <Image className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-                  {imagePreview ? "Trocar Imagem" : "Selecionar Imagem"}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Formatos aceitos: JPG, PNG, GIF. Tamanho máximo: 5MB
-              </p>
+              ) : null}
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="flex-1 gap-2"><Upload className="h-4 w-4" />{imagePreview ? "Trocar Imagem" : "Selecionar Imagem"}</Button>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
             </div>
+            <p className="text-xs text-muted-foreground mt-2">Tamanho máximo: 5MB.</p>
           </div>
           
           <div>
             <Label htmlFor="stock">Estoque Inicial</Label>
-            <Input
-              id="stock"
-              type="number"
-              value={formData.current_stock}
-              onChange={(e) => setFormData(prev => ({ ...prev, current_stock: parseInt(e.target.value) || 0 }))}
-              min="0"
-            />
+            <Input id="stock" type="number" value={formData.current_stock} onChange={(e) => setFormData(prev => ({ ...prev, current_stock: parseInt(e.target.value) || 0 }))} min="0" />
           </div>
         </div>
         
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            Cancelar
-          </Button>
-            <Button onClick={handleSubmit} disabled={loading || !canSave}>
-              {loading ? "Salvando..." : publication ? "Atualizar" : "Criar"} Publicação
-            </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={loading || !canSave}>{loading ? "Salvando..." : publication ? "Atualizar" : "Criar"} Publicação</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
