@@ -153,11 +153,11 @@ const GerenciarSimplified = () => {
         title: "Sucesso",
         description: "Código QR Externo salvo!",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar código QR:', error);
       toast({
         title: "Erro",
-        description: "Erro ao salvar o código QR.",
+        description: `Erro ao salvar o código QR: ${error.message}`,
         variant: "destructive",
       });
     } finally {
