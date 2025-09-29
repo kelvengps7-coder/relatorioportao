@@ -252,6 +252,17 @@ const GerenciarSimplified = () => {
     );
   }
 
+  const handleScanSuccess = (result: string | null) => {
+    if (result) {
+      setSearchTerm(result);
+      toast({
+        title: "Código lido!",
+        description: `Buscando por: ${result}`,
+      });
+    }
+    setIsScannerOpen(false);
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header */}
@@ -521,12 +532,7 @@ const GerenciarSimplified = () => {
       
       {isScannerOpen && (
         <QrCodeScanner
-          onScan={(result) => {
-            if (result) {
-              setSearchTerm(result);
-            }
-            setIsScannerOpen(false);
-          }}
+          onScan={handleScanSuccess}
           onClose={() => setIsScannerOpen(false)}
         />
       )}
