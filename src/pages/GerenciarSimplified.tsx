@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2, MoreVertical, QrCode } from "lucide-react";
+import { FolderOpen, Plus, Search, Edit, Trash2, Download, Settings, Loader2, MoreVertical, QrCode, Camera } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { CodeBadge } from "@/components/ui/code-badge";
 import { PublicationFormDialog } from "@/components/PublicationFormDialog";
 import { PublicationCover } from "@/components/PublicationCover";
+import QrCodeScanner from '@/components/QrCodeScanner';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { Publication } from "@/types";
@@ -45,6 +46,7 @@ const GerenciarSimplified = () => {
   const [showNewForm, setShowNewForm] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const { toast } = useToast();
   // Remove admin check - all users can access in public mode
 
@@ -137,7 +139,7 @@ const GerenciarSimplified = () => {
     try {
       const { data, error } = await supabase
         .from('publications')
-        .update({ codigoExternoQR: qrCode })
+        .update({ codigoExternoQR: qrCode.toUpperCase() })
         .eq('id', qrCodePublication.id)
         .select()
         .single();
@@ -221,12 +223,17 @@ const GerenciarSimplified = () => {
 
   // Filters
   const filteredPublications = publications.filter(pub => {
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = pub.name.toLowerCase().includes(searchLower) ||
-                         (pub.code && pub.code.toLowerCase().includes(searchLower));
-    const matchesCategory = categoryFilter === "all" || pub.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const searchUpper = searchTerm.toUpperCase();
+    return (
+      (categoryFilter === "all" || pub.category === categoryFilter) &&
+      (
+        pub.name.toUpperCase().includes(searchUpper) ||
+        (pub.code && pub.code.toUpperCase().includes(searchUpper)) ||
+        (pub.codigoExternoQR && pub.codigoExternoQR.toUpperCase().includes(searchUpper))
+      )
+    );
   });
+  
 
   const categories = Array.from(new Set(publications.map(p => p.category))).sort();
 
@@ -306,6 +313,14 @@ const GerenciarSimplified = () => {
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10"
                     />
+                     <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 h-7 w-7"
+                      onClick={() => setIsScannerOpen(true)}
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
                   </div>
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                     <SelectTrigger className="w-full md:w-[200px]">
@@ -483,7 +498,7 @@ const GerenciarSimplified = () => {
             <DialogDescription>
               Insira o código alfanumérico único da publicação (ex: O7I6PW4JV).
             </DialogDescription>
-          </DialogHeader>
+          </Header>
           <div className="space-y-4">
             <Label htmlFor="qrCode">Código QR</Label>
             <Input
@@ -503,6 +518,18 @@ const GerenciarSimplified = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {isScannerOpen && (
+        <QrCodeScanner
+          onScan={(result) => {
+            if (result) {
+              setSearchTerm(result);
+            }
+            setIsScannerOpen(false);
+          }}
+          onClose={() => setIsScannerOpen(false)}
+        />
+      )}
 
 
       {/* Image Zoom Dialog */}
@@ -513,7 +540,7 @@ const GerenciarSimplified = () => {
             <DialogDescription>
               Visualização em tamanho ampliado da capa da publicação
             </DialogDescription>
-          </DialogHeader>
+          </Header>
           {zoomedImage && (
             <div className="flex justify-center">
               <img 
