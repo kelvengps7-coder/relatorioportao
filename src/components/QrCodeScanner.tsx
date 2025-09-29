@@ -1,81 +1,92 @@
-import { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { useEffect, useState, useRef } from 'react';
+import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeSupportedFormats, CameraDevice } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
-import { X, CameraOff } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { X, CameraOff, SwitchCamera } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
   onClose: () => void;
 }
 
-// Função para calcular o tamanho da área de leitura (qrbox) de forma responsiva
 const getQrboxSize = () => {
   const smallerEdge = Math.min(window.innerWidth, window.innerHeight);
-  const qrboxSize = Math.floor(smallerEdge * 0.7); // 70% do menor lado da tela
-  return qrboxSize;
+  return Math.floor(smallerEdge * 0.7);
 };
 
 const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
   const readerId = "qr-code-reader-element";
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const { toast } = useToast();
+
+  const [cameras, setCameras] = useState<CameraDevice[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(undefined);
   const [permissionError, setPermissionError] = useState(false);
 
+  // Inicializa o scanner e busca as câmeras disponíveis
   useEffect(() => {
-    // A instância do scanner é criada aqui para garantir que o elemento DOM exista.
     if (!scannerRef.current) {
       scannerRef.current = new Html5Qrcode(readerId, {
         verbose: false,
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
       });
     }
-    const scanner = scannerRef.current;
-    
-    let isScanning = true;
-    setPermissionError(false);
 
-    const startCamera = async () => {
-      try {
-        const cameras = await Html5Qrcode.getCameras();
-        if (cameras && cameras.length) {
-          const lastUsedCameraId = localStorage.getItem('lastUsedCameraId');
-          const camera = cameras.find(c => c.id === lastUsedCameraId) || cameras.find(c => c.label.toLowerCase().includes('back')) || cameras[0];
-          
-          await scanner.start(
-            camera.id,
-            {
-              fps: 30,
-              qrbox: getQrboxSize(), // Executa a função para obter o valor
-              aspectRatio: 1.0,
-              disableFlip: false,
-            },
-            (decodedText) => {
-              if (isScanning) {
-                isScanning = false;
-                onScan(decodedText);
-                localStorage.setItem('lastUsedCameraId', camera.id);
-              }
-            },
-            () => { /* Ignorar falhas de varredura contínua */ }
-          );
-        } else {
-          throw new Error("Nenhuma câmera foi encontrada.");
+    Html5Qrcode.getCameras()
+      .then(devices => {
+        if (devices && devices.length) {
+          setCameras(devices);
+          // Prioriza a câmera traseira ('environment') ou a primeira da lista
+          const backCamera = devices.find(d => d.label.toLowerCase().includes('back')) || devices[0];
+          setSelectedCameraId(backCamera.id);
         }
-      } catch (err) {
-        console.error("Falha ao iniciar o leitor de QR code:", err);
+      })
+      .catch(() => {
         setPermissionError(true);
-      }
-    };
+      });
+  }, []);
 
-    startCamera();
+  // Inicia a câmera quando o ID da câmera selecionada muda
+  useEffect(() => {
+    if (!selectedCameraId || !scannerRef.current) {
+      return;
+    }
+    
+    const scanner = scannerRef.current;
+    let isScanning = true;
+
+    // Para a câmera antes de iniciar uma nova instância
+    if (scanner.isScanning) {
+      scanner.stop();
+    }
+
+    scanner.start(
+      selectedCameraId,
+      {
+        fps: 24,
+        qrbox: getQrboxSize,
+        aspectRatio: 1.0,
+      },
+      (decodedText) => {
+        if (isScanning) {
+          isScanning = false;
+          scanner.stop(); // Para a câmera automaticamente no sucesso
+          toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
+          onScan(decodedText);
+        }
+      },
+      () => { /* Ignore scan failure */ }
+    ).catch(() => {
+      setPermissionError(true);
+    });
 
     return () => {
-      if (scanner && scanner.getState() === Html5QrcodeScannerState.SCANNING) {
-        scanner.stop().catch(error => {
-          console.error("Erro ao parar o leitor de QR code:", error);
-        });
+      if (scanner && scanner.isScanning) {
+        scanner.stop().catch(() => {});
       }
     };
-  }, [onScan]);
+  }, [selectedCameraId, onScan, toast]);
 
   return (
     <div 
@@ -83,16 +94,11 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
       onClick={onClose}
     >
       <div 
-        className="relative bg-background p-6 rounded-2xl shadow-lg w-full max-w-sm mt-10"
+        className="relative bg-background p-4 sm:p-6 rounded-2xl shadow-lg w-full max-w-md mt-10"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-3 right-3 z-[101]">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full h-9 w-9 bg-background/70 hover:bg-background/90 backdrop-blur-sm"
-            onClick={onClose}
-          >
+          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9 bg-background/70 hover:bg-background/90" onClick={onClose}>
             <X className="h-5 w-5" />
           </Button>
         </div>
@@ -100,21 +106,41 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
         <div className="text-center mb-4">
           <h2 className="text-xl font-bold">Leitor de QR Code</h2>
           <p className="text-sm text-muted-foreground">
-            {permissionError ? "A permissão da câmera é necessária." : "Posicione o código na área de leitura."}
+            {permissionError ? "A permissão da câmera é necessária." : "Aponte a câmera para o código QR."}
           </p>
         </div>
         
         <div className="overflow-hidden rounded-lg w-full aspect-square bg-slate-900 flex items-center justify-center">
           {permissionError ? (
-            <div className="text-center text-red-400">
+            <div className="text-center text-red-400 p-4">
               <CameraOff className="h-12 w-12 mx-auto mb-2" />
-              <p className="text-sm font-medium">Não foi possível acessar a câmera.</p>
+              <p className="font-medium">Não foi possível acessar a câmera.</p>
               <p className="text-xs text-muted-foreground mt-1">Por favor, libere o acesso nas configurações do seu navegador.</p>
             </div>
           ) : (
             <div id={readerId} className="w-full h-full" />
           )}
         </div>
+        
+        {cameras.length > 1 && !permissionError && (
+          <div className="mt-4">
+            <Select value={selectedCameraId} onValueChange={setSelectedCameraId}>
+              <SelectTrigger>
+                <div className="flex items-center gap-2">
+                  <SwitchCamera className="h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Trocar câmera" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {cameras.map(camera => (
+                  <SelectItem key={camera.id} value={camera.id}>
+                    {camera.label || `Câmera ${camera.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
     </div>
   );
