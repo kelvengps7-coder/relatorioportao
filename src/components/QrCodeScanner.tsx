@@ -3,11 +3,16 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats, CameraDevice } from 'html5-qr
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X, CameraOff, SwitchCamera } from 'lucide-react';
-import { isMobile } from 'react-device-detect';
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
   onClose: () => void;
+}
+
+// Interface para a nossa lista de câmeras simplificada
+interface SimplifiedCamera {
+  id: string;
+  label: string;
 }
 
 const getQrboxSize = () => {
@@ -15,84 +20,84 @@ const getQrboxSize = () => {
   return Math.floor(smallerEdge * 0.7);
 };
 
-// Implementação Final e Definitiva do Leitor de QR Code
 const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
-  // ID estático para o elemento do DOM para garantir estabilidade
   const readerId = "qr-code-reader-element";
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
-  const [cameras, setCameras] = useState<CameraDevice[]>([]);
+  const [cameras, setCameras] = useState<SimplifiedCamera[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // Configuração mínima e estável para a câmera
-  const scannerConfig = { 
-      fps: 10,
-      qrbox: getQrboxSize,
-  };
-
-  // Callback de sucesso que para o scanner e envia o resultado
-  const onScanSuccess = (decodedText: string) => {
-    if (scannerRef.current?.isScanning) {
-      scannerRef.current.stop().then(() => {
-        onScan(decodedText);
-      }).catch(console.error);
-    }
-  };
-
-  // Efeito principal que roda UMA VEZ para inicializar tudo
+  // Efeito principal que gerencia o ciclo de vida do scanner
   useEffect(() => {
-    // Cria a instância do scanner
     scannerRef.current = new Html5Qrcode(readerId, {
       verbose: false,
       formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
     });
 
-    // Busca as câmeras e inicia a padrão
     Html5Qrcode.getCameras()
       .then(devices => {
-        if (devices && devices.length > 0) {
-          setCameras(devices);
-          const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
-          const initialCameraId = (isMobile && backCamera) ? backCamera.id : devices[0].id;
-          
-          setSelectedCameraId(initialCameraId);
+        if (devices && devices.length) {
+          // --- LÓGICA DE FILTRAGEM INTELIGENTE ---
+          const frontCamera = devices.find(d => d.label.toLowerCase().includes('front') || d.label.toLowerCase().includes('frontal'));
+          const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('traseira'));
 
-          // Inicia o scanner com a câmera padrão
-          scannerRef.current?.start(initialCameraId, scannerConfig, onScanSuccess, () => {})
-            .catch(err => {
-              console.error("Falha ao iniciar a câmera inicial:", err);
-              setError("Não foi possível iniciar a câmera. Verifique as permissões.");
-            });
+          const simplifiedCameras: SimplifiedCamera[] = [];
+          if (backCamera) simplifiedCameras.push({ id: backCamera.id, label: 'Câmera Traseira' });
+          if (frontCamera) simplifiedCameras.push({ id: frontCamera.id, label: 'Câmera Frontal' });
+          
+          // Se não encontrou por nome, adiciona todas como fallback
+          if (simplifiedCameras.length === 0) {
+              devices.forEach(d => simplifiedCameras.push({ id: d.id, label: d.label || `Câmera ${d.id}`}));
+          }
+
+          setCameras(simplifiedCameras);
+          
+          // --- PRIORIDADE TRASEIRA GARANTIDA ---
+          const initialCameraId = backCamera?.id || simplifiedCameras[0]?.id;
+          if (initialCameraId) {
+            setSelectedCameraId(initialCameraId);
+          } else {
+            setError("Nenhuma câmera compatível encontrada.");
+          }
         } else {
           setError("Nenhuma câmera encontrada.");
         }
       })
       .catch(() => {
-        setError("Não foi possível acessar as câmeras. Verifique as permissões do navegador.");
+        setError("Não foi possível acessar as câmeras. Verifique as permissões.");
       });
 
-    // Função de limpeza para garantir que a câmera pare ao desmontar o componente
     return () => {
       if (scannerRef.current?.isScanning) {
         scannerRef.current.stop().catch(console.error);
       }
     };
-  }, []); // O array vazio [] garante que este efeito rode apenas uma vez
+  }, []);
 
-  // Função manual e segura para trocar de câmera
-  const handleCameraChange = (newCameraId: string) => {
-    if (scannerRef.current?.isScanning) {
-      scannerRef.current.stop().then(() => {
-        setSelectedCameraId(newCameraId);
-        scannerRef.current?.start(newCameraId, scannerConfig, onScanSuccess, () => {})
-          .catch(err => {
-            console.error("Falha ao trocar de câmera:", err);
-            setError("Não foi possível trocar para esta câmera.");
-          });
-      }).catch(console.error);
+  // Efeito para iniciar e trocar a câmera
+  useEffect(() => {
+    if (!selectedCameraId || !scannerRef.current) return;
+
+    const scanner = scannerRef.current;
+    
+    // Para a câmera antes de iniciar uma nova
+    if (scanner.isScanning) {
+      scanner.stop();
     }
-  };
+    
+    scanner.start(
+      selectedCameraId, 
+      { fps: 10, qrbox: getQrboxSize }, 
+      (decodedText) => {
+        onScan(decodedText);
+      }, 
+      () => {}
+    ).catch(() => {
+      setError("Não foi possível iniciar esta câmera.");
+    });
+
+  }, [selectedCameraId]);
 
   return (
     <div 
@@ -129,7 +134,7 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
         
         {cameras.length > 1 && !error && (
           <div className="mt-4">
-            <Select value={selectedCameraId} onValueChange={handleCameraChange}>
+            <Select value={selectedCameraId} onValueChange={setSelectedCameraId}>
               <SelectTrigger>
                 <div className="flex items-center gap-2">
                   <SwitchCamera className="h-4 w-4 text-muted-foreground" />
@@ -139,7 +144,7 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
               <SelectContent>
                 {cameras.map(camera => (
                   <SelectItem key={camera.id} value={camera.id}>
-                    {camera.label || `Câmera ${camera.id}`}
+                    {camera.label}
                   </SelectItem>
                 ))}
               </SelectContent>
