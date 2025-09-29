@@ -1,10 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats, CameraDevice } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, CameraOff, SwitchCamera } from 'lucide-react';
+import { X, CameraOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { isMobile } from 'react-device-detect';
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
@@ -13,20 +11,20 @@ interface QrCodeScannerProps {
 
 const getQrboxSize = () => {
   const smallerEdge = Math.min(window.innerWidth, window.innerHeight);
-  return Math.floor(smallerEdge * 0.7);
+  return Math.floor(smallerEdge * 0.75); // Use 75% for a larger scanning area
 };
 
+// Definitive test implementation of the QR Code Scanner
 const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
   const readerId = "qr-code-reader-element";
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const { toast } = useToast();
 
-  const [cameras, setCameras] = useState<CameraDevice[]>([]);
-  const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(undefined);
+  const [status, setStatus] = useState("Iniciando...");
   const [permissionError, setPermissionError] = useState(false);
 
-  // Initialize the scanner and get camera permissions
   useEffect(() => {
+    // Ensure this effect runs only once to prevent re-renders from causing issues
     if (!scannerRef.current) {
       scannerRef.current = new Html5Qrcode(readerId, {
         verbose: false,
@@ -34,82 +32,75 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
       });
     }
 
-    Html5Qrcode.getCameras()
-      .then(devices => {
-        if (devices && devices.length) {
-          setCameras(devices);
-          if (!selectedCameraId) {
-            const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
-            if (isMobile && backCamera) {
-              setSelectedCameraId(backCamera.id);
-            } else {
-              setSelectedCameraId(devices[0].id);
-            }
-          }
-        }
-      })
-      .catch(() => {
-        setPermissionError(true);
-      });
-  }, []);
-
-  // Definitive implementation for starting and managing the camera
-  useEffect(() => {
-    if (!scannerRef.current) return;
-    
     const scanner = scannerRef.current;
 
+    // Minimal and highly compatible configuration
     const config = { 
         fps: 10,
         qrbox: getQrboxSize,
     };
 
     const successCallback = (decodedText: string) => {
-        scanner.stop().catch(console.error); 
-        toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
-        onScan(decodedText);
+      if (scanner.isScanning) {
+        scanner.stop().catch(console.error);
+      }
+      toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
+      onScan(decodedText);
     };
-    
-    const startScanner = async () => {
-        if (scanner.isScanning) {
-            await scanner.stop().catch(console.error);
-        }
 
+    const startScanner = async () => {
+      // Always ensure cleanup happens before a new start attempt
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+      
+      // --- TEST 1: Attempt to start the rear camera directly ---
+      setStatus("Procurando câmera traseira...");
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          config,
+          successCallback,
+          () => {} // Ignore per-frame scan failures
+        );
+        setStatus("Leitor Ativo");
+        return; // Success, exit the function
+      } catch (error) {
+        console.warn("Falha ao iniciar câmera traseira (environment):", error);
+        
+        // --- TEST 2: Fallback to ANY available camera if the rear fails ---
+        setStatus("Câmera traseira não encontrada. Tentando qualquer câmera disponível...");
         try {
-            const cameraToStart = isMobile ? { facingMode: "environment" } : selectedCameraId;
-            
-            if (cameraToStart) {
-                await scanner.start(
-                    cameraToStart, 
-                    config, 
-                    successCallback, 
-                    () => {}
-                );
-            }
-        } catch (error) {
-            console.error("ERRO CRÍTICO AO INICIAR A CÂMERA:", error);
-            toast({
-                title: "Erro de Câmera",
-                description: "Falha ao iniciar ou trocar de câmera. Verifique as permissões.",
-                variant: "destructive"
-            });
-            setPermissionError(true);
+          // This is the most basic request, asking for any camera without specifying which one.
+          await scanner.start(
+            {}, // An empty constraint object asks for any camera
+            config,
+            successCallback,
+            () => {}
+          );
+          setStatus("Leitor Ativo");
+        } catch (finalError) {
+          console.error("ERRO CRÍTICO: Nenhuma câmera funcional encontrada.", finalError);
+          setStatus("Falha ao acessar a câmera. Verifique as permissões.");
+          setPermissionError(true);
+          toast({
+              title: "Erro de Câmera",
+              description: "Não foi possível iniciar nenhuma câmera. Por favor, verifique as permissões do seu navegador.",
+              variant: "destructive"
+          });
         }
+      }
     };
 
     startScanner();
 
+    // Cleanup function on component unmount
     return () => {
-        if (scannerRef.current && scannerRef.current.isScanning) {
-            scannerRef.current.stop().catch(console.error);
-        }
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(console.error);
+      }
     };
-  }, [selectedCameraId, onScan, toast]);
-
-  // Corrected logic for manual camera switching
-  const handleCameraChange = (newCameraId: string) => {
-    setSelectedCameraId(newCameraId);
-  };
+  }, []); // Empty dependency array ensures this runs only ONCE
 
   return (
     <div 
@@ -129,7 +120,7 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
         <div className="text-center mb-4">
           <h2 className="text-xl font-bold">Leitor de QR Code</h2>
           <p className="text-sm text-muted-foreground">
-            {permissionError ? "A permissão da câmera é necessária." : "Aponte a câmera para o código QR."}
+            Aponte a câmera para o código QR.
           </p>
         </div>
         
@@ -137,33 +128,21 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
           {permissionError ? (
             <div className="text-center text-red-400 p-4">
               <CameraOff className="h-12 w-12 mx-auto mb-2" />
-              <p className="font-medium">Não foi possível acessar a câmera.</p>
-              <p className="text-xs text-muted-foreground mt-1">Por favor, libere o acesso nas configurações do seu navegador.</p>
+              <p className="font-medium">{status}</p>
+              <p className="text-xs text-muted-foreground mt-1">Por favor, libere o acesso nas configurações do seu navegador e recarregue a página.</p>
             </div>
           ) : (
-            <div id={readerId} className="w-full h-full" />
+            <div className="relative w-full h-full">
+              <div id={readerId} className="w-full h-full" />
+              <div className="absolute bottom-2 left-2 right-2 bg-black/50 text-white text-xs text-center p-2 rounded-md">
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="animate-spin h-4 w-4" />
+                  <span>Status: {status}</span>
+                </div>
+              </div>
+            </div>
           )}
         </div>
-        
-        {cameras.length > 1 && !permissionError && (
-          <div className="mt-4">
-            <Select value={selectedCameraId} onValueChange={handleCameraChange}>
-              <SelectTrigger>
-                <div className="flex items-center gap-2">
-                  <SwitchCamera className="h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="Trocar câmera" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {cameras.map(camera => (
-                  <SelectItem key={camera.id} value={camera.id}>
-                    {camera.label || `Câmera ${camera.id}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
       </div>
     </div>
   );
