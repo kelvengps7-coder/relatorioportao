@@ -1,83 +1,122 @@
-import { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { useEffect, useState, useRef } from 'react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats, CameraDevice } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
-import { X, CameraOff, Video, VideoOff } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { X, CameraOff, SwitchCamera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { isMobile } from 'react-device-detect';
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
   onClose: () => void;
 }
 
-// Componente de Leitor de QR Code Profissional usando a biblioteca ZXing
+const getQrboxSize = () => {
+  const smallerEdge = Math.min(window.innerWidth, window.innerHeight);
+  return Math.floor(smallerEdge * 0.7);
+};
+
+// Versão Final e Estável do Leitor de QR Code
 const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  const readerId = "qr-code-reader-element-" + Math.random();
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const { toast } = useToast();
 
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+  const [cameras, setCameras] = useState<CameraDevice[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
+  const [permissionError, setPermissionError] = useState(false);
 
-  // Inicialização e busca por câmeras
+  // Efeito para inicializar o scanner e obter a lista de câmeras
   useEffect(() => {
-    const initScanner = async () => {
-      try {
-        const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
-        if (videoInputDevices && videoInputDevices.length > 0) {
-          setDevices(videoInputDevices);
-          // Prioriza a câmera traseira (environment)
-          const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('traseira'));
-          setSelectedDeviceId(rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId);
-        } else {
-          setError("Nenhuma câmera encontrada.");
-        }
-      } catch (err) {
-        console.error("Erro ao listar câmeras:", err);
-        setError("Erro ao acessar câmeras. Verifique as permissões do navegador.");
-      }
-    };
-    initScanner();
-  }, []);
-
-  // Lógica de início e parada do scanner
-  useEffect(() => {
-    if (!selectedDeviceId || !videoRef.current) {
-      return;
+    // Garante que o scanner seja inicializado apenas uma vez
+    if (!scannerRef.current) {
+      scannerRef.current = new Html5Qrcode(readerId, {
+        verbose: false,
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+      });
     }
 
-    const codeReader = codeReaderRef.current;
-    const videoElement = videoRef.current;
+    Html5Qrcode.getCameras()
+      .then(devices => {
+        if (devices && devices.length > 0) {
+          setCameras(devices);
+          // Define a câmera padrão de forma inteligente, mas não inicia o scanner aqui
+          if (!selectedCameraId) {
+            const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
+            if (isMobile && backCamera) {
+              setSelectedCameraId(backCamera.id);
+            } else {
+              setSelectedCameraId(devices[0].id);
+            }
+          }
+        } else {
+          setPermissionError(true);
+        }
+      })
+      .catch(() => {
+        setPermissionError(true);
+      });
 
-    const startScan = async () => {
+    // Função de limpeza para desmontar o scanner ao sair
+    return () => {
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(console.error);
+      }
+    };
+  }, []);
+
+  // Efeito para iniciar/parar o scanner quando a câmera selecionada mudar
+  useEffect(() => {
+    if (!selectedCameraId || !scannerRef.current) {
+      return;
+    }
+    
+    const scanner = scannerRef.current;
+
+    // Configuração mínima para máxima compatibilidade
+    const config = { 
+        fps: 10,
+        qrbox: getQrboxSize,
+    };
+
+    const successCallback = (decodedText: string) => {
+        scanner.stop().catch(console.error); 
+        onScan(decodedText);
+    };
+    
+    const startScanner = async () => {
+      // Sempre para o scanner antes de iniciar para evitar erros de troca
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+
       try {
-        await codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
-          if (result) {
-            // Sucesso na leitura
-            onScan(result.getText());
-            codeReader.reset(); // Para a câmera
-          }
-          if (err && !(err instanceof NotFoundException)) {
-            console.error('Erro de decodificação:', err);
-          }
-        });
-      } catch (err) {
-        console.error('Falha crítica ao iniciar o leitor:', err);
-        setError('Não foi possível iniciar a câmera selecionada.');
+        // Inicia usando apenas o ID da câmera, a abordagem mais estável
+        await scanner.start(
+            selectedCameraId, 
+            config, 
+            successCallback, 
+            () => {} // Ignora falhas de decodificação por frame
+        );
+      } catch (error) {
+        console.error("ERRO CRÍTICO AO INICIAR A CÂMERA:", error);
+        setPermissionError(true);
       }
     };
 
-    startScan();
+    startScanner();
 
-    // Função de limpeza para garantir que a câmera pare ao sair
-    return () => {
-      codeReader.reset();
-    };
-  }, [selectedDeviceId, onScan]);
+  }, [selectedCameraId, onScan]);
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[99]" onClick={onClose}>
-      <div className="relative bg-background p-4 sm:p-6 rounded-2xl shadow-lg w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-start justify-center z-[99] pt-10" // pt-10 para posicionar no topo
+      onClick={onClose}
+    >
+      <div 
+        className="relative bg-background p-4 sm:p-6 rounded-2xl shadow-lg w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="absolute top-3 right-3 z-10">
           <Button variant="ghost" size="icon" className="rounded-full h-9 w-9 bg-background/70 hover:bg-background/90" onClick={onClose}>
             <X className="h-5 w-5" />
@@ -86,36 +125,39 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
 
         <div className="text-center mb-4">
           <h2 className="text-xl font-bold">Leitor de QR Code</h2>
-          <p className="text-sm text-muted-foreground">Aponte para o código QR para escanear.</p>
+          <p className="text-sm text-muted-foreground">
+            {permissionError ? "A permissão da câmera é necessária." : "Aponte a câmera para o código QR."}
+          </p>
         </div>
-
+        
         <div className="overflow-hidden rounded-lg w-full aspect-square bg-slate-900 flex items-center justify-center">
-          {error ? (
+          {permissionError ? (
             <div className="text-center text-red-400 p-4">
               <CameraOff className="h-12 w-12 mx-auto mb-2" />
-              <p className="font-medium">{error}</p>
+              <p className="font-medium">Falha ao acessar a câmera.</p>
             </div>
           ) : (
-            <div className="relative w-full h-full">
-              <video ref={videoRef} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 border-4 border-white/50 rounded-lg pointer-events-none" />
-            </div>
+            <div id={readerId} className="w-full h-full" />
           )}
         </div>
-
-        {devices.length > 1 && (
-          <div className="mt-4 flex justify-center">
-             <select 
-                value={selectedDeviceId} 
-                onChange={(e) => setSelectedDeviceId(e.target.value)}
-                className="bg-gray-800 text-white p-2 rounded-md"
-              >
-              {devices.map(device => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Câmera ${device.deviceId}`}
-                </option>
-              ))}
-            </select>
+        
+        {cameras.length > 1 && !permissionError && (
+          <div className="mt-4">
+            <Select value={selectedCameraId} onValueChange={setSelectedCameraId}>
+              <SelectTrigger>
+                <div className="flex items-center gap-2">
+                  <SwitchCamera className="h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Trocar câmera" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {cameras.map(camera => (
+                  <SelectItem key={camera.id} value={camera.id}>
+                    {camera.label || `Câmera ${camera.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
