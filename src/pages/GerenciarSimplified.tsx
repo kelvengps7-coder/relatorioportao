@@ -498,7 +498,7 @@ const GerenciarSimplified = () => {
             <DialogDescription>
               Insira o código alfanumérico único da publicação (ex: O7I6PW4JV).
             </DialogDescription>
-          </Header>
+          </DialogHeader>
           <div className="space-y-4">
             <Label htmlFor="qrCode">Código QR</Label>
             <Input
@@ -540,7 +540,7 @@ const GerenciarSimplified = () => {
             <DialogDescription>
               Visualização em tamanho ampliado da capa da publicação
             </DialogDescription>
-          </Header>
+          </DialogHeader>
           {zoomedImage && (
             <div className="flex justify-center">
               <img 
