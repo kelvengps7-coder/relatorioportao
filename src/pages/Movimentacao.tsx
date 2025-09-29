@@ -181,18 +181,20 @@ const Movimentacao = () => {
   };
 
   const handleScanSuccess = (decodedText: string) => {
-    const publication = publications.find(p => p.codigoExternoQR === decodedText);
+    setShowScanner(false);
+    const publication = publications.find(p => p.codigoExternoQR === decodedText || p.urlDoFabricante === decodedText);
+    
     if (publication) {
       setSelectedPublication(publication.id);
-      setShowScanner(false);
       toast({
         title: "Sucesso",
-        description: `Publicação "${publication.name}" encontrada.`,
+        description: `Publicação "${publication.name}" selecionada.`,
       });
     } else {
+      setSearchTerm(decodedText);
       toast({
-        title: "Erro",
-        description: "Publicação não encontrada com o código lido. Tente buscar manualmente ou verifique o código.",
+        title: "Publicação Não Encontrada",
+        description: "Nenhuma publicação corresponde ao QR Code lido. O valor foi inserido na busca para facilitar o cadastro.",
         variant: "destructive",
       });
     }
@@ -232,7 +234,7 @@ const Movimentacao = () => {
               Registrar Movimentação de Estoque
             </CardTitle>
             <CardDescription>
-              Selecione a publicação, informe a quantidade e o tipo de movimento.
+              Selecione la publicación, informe la cantidad y el tipo de movimiento.
             </CardDescription>
             <div className="mt-4">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
@@ -310,15 +312,11 @@ const Movimentacao = () => {
                     </Command>
                   </PopoverContent>
                 </Popover>
-                <Button variant="outline" onClick={() => setShowScanner(prev => !prev)} className="h-11">
+                <Button variant="outline" onClick={() => setShowScanner(true)} className="h-11">
                   <Camera className="h-5 w-5" />
                 </Button>
               </div>
-              {showScanner && (
-                <div className="mt-4">
-                  <QrCodeScanner onScanSuccess={handleScanSuccess} />
-                </div>
-              )}
+
               {selectedPub && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>Estoque atual:</span>
@@ -509,6 +507,13 @@ const Movimentacao = () => {
           )}
         </CardContent>
       </Card>
+      
+      {showScanner && (
+        <QrCodeScanner
+          onScan={handleScanSuccess}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
       
       {/* Image Zoom Dialog */}
       <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>
