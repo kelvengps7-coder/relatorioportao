@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X, CameraOff, SwitchCamera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { isMobile } from 'react-device-detect';
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
@@ -24,7 +25,6 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
   const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(undefined);
   const [permissionError, setPermissionError] = useState(false);
 
-  // Inicializa o scanner e busca as câmeras disponíveis
   useEffect(() => {
     if (!scannerRef.current) {
       scannerRef.current = new Html5Qrcode(readerId, {
@@ -37,9 +37,12 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
       .then(devices => {
         if (devices && devices.length) {
           setCameras(devices);
-          // Prioriza a câmera traseira ('environment') ou a primeira da lista
-          const backCamera = devices.find(d => d.label.toLowerCase().includes('back')) || devices[0];
-          setSelectedCameraId(backCamera.id);
+          const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
+          if (isMobile && backCamera) {
+            setSelectedCameraId(backCamera.id);
+          } else {
+            setSelectedCameraId(devices[0].id);
+          }
         }
       })
       .catch(() => {
@@ -47,46 +50,65 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
       });
   }, []);
 
-  // Inicia a câmera quando o ID da câmera selecionada muda
   useEffect(() => {
     if (!selectedCameraId || !scannerRef.current) {
       return;
     }
     
     const scanner = scannerRef.current;
-    let isScanning = true;
 
-    // Para a câmera antes de iniciar uma nova instância
-    if (scanner.isScanning) {
-      scanner.stop();
-    }
-
-    scanner.start(
-      selectedCameraId,
-      {
-        fps: 24,
-        qrbox: getQrboxSize,
-        aspectRatio: 1.0,
-      },
-      (decodedText) => {
-        if (isScanning) {
-          isScanning = false;
-          scanner.stop(); // Para a câmera automaticamente no sucesso
-          toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
-          onScan(decodedText);
+    const startScanner = async () => {
+      try {
+        if (scanner.isScanning) {
+          await scanner.stop();
         }
-      },
-      () => { /* Ignore scan failure */ }
-    ).catch(() => {
-      setPermissionError(true);
-    });
+
+        const config = {
+          fps: 24,
+          qrbox: getQrboxSize,
+          aspectRatio: 1.0,
+          videoConstraints: {
+              width: 1280,
+              height: 720,
+              facingMode: { exact: "environment" }
+          }
+        };
+
+        await scanner.start(
+          selectedCameraId,
+          config,
+          (decodedText) => {
+            scanner.stop();
+            toast({ title: "Sucesso!", description: "QR Code lido. Processando..." });
+            onScan(decodedText);
+          },
+          () => { /* Ignore scan failure */ }
+        );
+      } catch (error) {
+        console.error("Erro ao iniciar a câmera:", error);
+        toast({
+          title: "Erro de Câmera",
+          description: "Não foi possível trocar de câmera. Tente recarregar a página.",
+          variant: "destructive"
+        });
+        setPermissionError(true);
+      }
+    };
+
+    startScanner();
 
     return () => {
       if (scanner && scanner.isScanning) {
-        scanner.stop().catch(() => {});
+        scanner.stop().catch(console.error);
       }
     };
   }, [selectedCameraId, onScan, toast]);
+
+  const handleCameraChange = async (newCameraId: string) => {
+    if (scannerRef.current) {
+      setSelectedCameraId(newCameraId);
+    }
+  };
 
   return (
     <div 
@@ -124,7 +146,7 @@ const QrCodeScanner = ({ onScan, onClose }: QrCodeScannerProps) => {
         
         {cameras.length > 1 && !permissionError && (
           <div className="mt-4">
-            <Select value={selectedCameraId} onValueChange={setSelectedCameraId}>
+            <Select value={selectedCameraId} onValueChange={handleCameraChange}>
               <SelectTrigger>
                 <div className="flex items-center gap-2">
                   <SwitchCamera className="h-4 w-4 text-muted-foreground" />
