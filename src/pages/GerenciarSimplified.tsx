@@ -202,7 +202,7 @@ const GerenciarSimplified = () => {
     
     if (!isValidUrl(scannedUrl)) {
       toast({ title: "QR Code Inválido", description: "O conteúdo lido não é uma URL válida.", variant: "destructive" });
-      setSearchTerm(scannedUrl); // Coloca o conteúdo inválido na busca para depuração
+      setSearchTerm(scannedUrl);
       return;
     }
   
@@ -365,11 +365,18 @@ const GerenciarSimplified = () => {
       </Tabs>
 
       {/* Dialogs */}
-      {isScannerOpen && (
-          <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-              <QrCodeScanner onScan={handleScanSuccess} />
-          </Dialog>
-      )}
+      <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+        <DialogContent>
+           <DialogHeader>
+            <DialogTitle>Aponte para o QR Code</DialogTitle>
+          </DialogHeader>
+          <QrCodeScanner
+            onScan={handleScanSuccess}
+            onClose={() => setIsScannerOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+      
       {canCreate && <PublicationFormDialog open={showNewForm} onOpenChange={setShowNewForm} onSuccess={loadPublications} />}
       {canEdit && <PublicationFormDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} publication={editingPublication} onSuccess={() => { loadPublications(); setEditDialogOpen(false); }} />}
       

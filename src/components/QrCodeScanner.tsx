@@ -1,92 +1,59 @@
 
-import React, { useState, useRef } from "react";
+import React, { useRef, useEffect } from "react";
 import jsQR from "jsqr";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
+  onClose: () => void;
 }
 
-const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan }) => {
-  const [showScanner, setShowScanner] = useState(false);
-  const [qrResult, setQrResult] = useState<string | null>(null);
+const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameId = useRef<number>();
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const image = new Image();
-        image.src = e.target?.result as string;
-        await image.decode();
-        const canvas = document.createElement("canvas");
-        canvas.width = image.width;
-        canvas.height = image.height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(image, 0, 0, image.width, image.height);
-          const imageData = ctx.getImageData(0, 0, image.width, image.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
-          if (code) {
-            setQrResult(code.data);
-            onScan(code.data);
-            setShowScanner(false);
-          } else {
-            toast({
-              title: "QR Code não encontrado",
-              description: "Nenhum QR Code foi detectado na imagem.",
-              variant: "destructive",
-            });
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+    if (!file) return;
 
-  const startScan = async () => {
-    setShowScanner(true);
-    setQrResult(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        requestAnimationFrame(tick);
-      }
-    } catch (err) {
-      console.error("Erro ao acessar a câmera:", err);
+    const image = new Image();
+    image.src = URL.createObjectURL(file);
+    await image.decode();
+
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(image, 0, 0, image.width, image.height);
+    const imageData = ctx.getImageData(0, 0, image.width, image.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+    if (code) {
+      onScan(code.data);
+    } else {
       toast({
-        title: "Erro de Câmera",
-        description:
-          "Não foi possível acessar a câmera. Verifique as permissões.",
+        title: "QR Code não encontrado",
+        description: "Nenhum QR Code foi detectado na imagem.",
         variant: "destructive",
       });
-      setShowScanner(false);
     }
   };
 
   const stopScan = () => {
     if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
+      (videoRef.current.srcObject as MediaStream)
+        .getTracks()
+        .forEach((track) => track.stop());
     }
-    setShowScanner(false);
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+    }
   };
 
   const tick = () => {
@@ -107,51 +74,57 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan }) => {
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
         if (code) {
-          setQrResult(code.data);
           onScan(code.data);
-          stopScan();
-          return;
+          return; 
         }
       }
     }
-    if (showScanner) {
-      requestAnimationFrame(tick);
-    }
+    animationFrameId.current = requestAnimationFrame(tick);
   };
 
+  useEffect(() => {
+    const startScan = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+          animationFrameId.current = requestAnimationFrame(tick);
+        }
+      } catch (err) {
+        console.error("Erro ao acessar a câmera:", err);
+        toast({
+          title: "Erro de Câmera",
+          description: "Não foi possível acessar a câmera. Verifique as permissões do seu navegador.",
+          variant: "destructive",
+        });
+        onClose();
+      }
+    };
+
+    startScan();
+
+    return () => {
+      stopScan();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <Dialog open={showScanner} onOpenChange={(open) => !open && stopScan()}>
-      <DialogTrigger asChild>
-        <Button onClick={startScan}>Ler QR Code</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Ler QR Code</DialogTitle>
-        </DialogHeader>
-        {qrResult ? (
-          <div>
-            <p>QR Code lido com sucesso:</p>
-            <p className="font-bold">{qrResult}</p>
-          </div>
-        ) : (
-          <div>
-            <video
-              ref={videoRef}
-              style={{ width: "100%", borderRadius: "8px" }}
-            />
-            <canvas ref={canvasRef} style={{ display: "none" }} />
-            <div className="mt-4 text-center">
-              <p>Ou faça upload de uma imagem:</p>
-              <Input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-              />
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+    <div>
+      <video
+        ref={videoRef}
+        style={{ width: "100%", borderRadius: "8px" }}
+        playsInline
+      />
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+      <div className="mt-4 text-center">
+        <p className="mb-2 text-sm text-muted-foreground">Ou faça upload de uma imagem</p>
+        <Input type="file" accept="image/*" onChange={handleFileChange} />
+      </div>
+    </div>
   );
 };
 
