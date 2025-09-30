@@ -188,7 +188,6 @@ const Movimentacao = () => {
   };
 
   const handleScanSuccess = (decodedText: string) => {
-    // Vibra o dispositivo assim que o scan for bem-sucedido
     if (navigator.vibrate) {
       navigator.vibrate(150);
     }
@@ -205,10 +204,7 @@ const Movimentacao = () => {
     
     if (publication) {
       setSelectedPublication(publication.id);
-      toast({
-        title: "Sucesso",
-        description: `Publicação "${publication.name}" selecionada.`,
-      });
+      // A notificação foi removida conforme solicitado.
     } else {
       setSearchTerm(searchTerm);
       toast({

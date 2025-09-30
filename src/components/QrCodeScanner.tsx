@@ -1,5 +1,5 @@
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import jsQR from "jsqr";
 import { X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -13,6 +13,7 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameId = useRef<number>();
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Função para parar a câmera e o loop de escaneamento
   const stopScan = () => {
@@ -44,20 +45,37 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-        // Se um QR code for encontrado, vibra, para a câmera e chama onScan.
         if (code) {
-          // Adiciona feedback tátil para o usuário
-          if (navigator.vibrate) {
-            navigator.vibrate(150);
+          // Para o loop de escaneamento para evitar múltiplos gatilhos
+          if (animationFrameId.current) {
+            cancelAnimationFrame(animationFrameId.current);
+            animationFrameId.current = undefined;
           }
+          
           stopScan();
-          onScan(code.data);
+
+          // Feedback tátil
+          if (navigator.vibrate) {
+            navigator.vibrate(120);
+          }
+
+          // Mostra a mensagem de sucesso
+          setShowSuccessMessage(true);
+
+          // Aguarda 1.5s antes de fechar e processar o resultado
+          setTimeout(() => {
+            onScan(code.data);
+          }, 1500);
+
           return;
         }
       }
     }
-    // Se nenhum QR code for encontrado, continua o loop.
-    animationFrameId.current = requestAnimationFrame(tick);
+    
+    // Continua o loop se nenhum código for encontrado
+    if (animationFrameId.current !== undefined) {
+      animationFrameId.current = requestAnimationFrame(tick);
+    }
   };
 
   useEffect(() => {
@@ -85,7 +103,7 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
 
     startScan();
 
-    // Função de limpeza: garante que a câmera seja desligada ao desmontar o componente
+    // Função de limpeza
     return () => {
       stopScan();
     };
@@ -115,6 +133,13 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         >
           <X className="h-5 w-5 text-gray-700" />
         </button>
+
+        {/* Mensagem de Sucesso */}
+        {showSuccessMessage && (
+          <div className="absolute top-10 inset-x-0 mx-auto w-fit bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-5">
+            ✅ QR Code lido com sucesso!
+          </div>
+        )}
       </div>
 
       {/* Canvas oculto para processamento */}
