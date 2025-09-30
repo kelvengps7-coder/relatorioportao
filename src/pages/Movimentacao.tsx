@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,8 @@ const Movimentacao = () => {
   const { logAction, showSuccessMessage, showErrorMessage } = useAuditLog();
   const [searchParams] = useSearchParams();
   const [showScanner, setShowScanner] = useState(false);
-  
+  const movementFormRef = useRef<HTMLDivElement>(null); // Ref para o formulário de movimentação
+
   // Estado para o modal de zoom da imagem
   const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
 
@@ -141,8 +142,6 @@ const Movimentacao = () => {
 
       if (movementError) throw movementError;
 
-      // O estoque é atualizado automaticamente pelo trigger update_stock_counts()
-      // Buscar estoque atualizado
       const { data: updatedPub, error: fetchError } = await supabase
         .from('publications')
         .select('current_stock')
@@ -152,7 +151,6 @@ const Movimentacao = () => {
       if (fetchError) throw fetchError;
       const newStock = updatedPub.current_stock;
 
-      // Log das ações
       await logAction('movement', 'stock_movements', movementData.id, null, {
         publication_id: selectedPublication,
         type: movementType,
@@ -166,12 +164,10 @@ const Movimentacao = () => {
         { current_stock: newStock }
       );
 
-      // Atualizar estado local
       setPublications(prev => prev.map(p => 
         p.id === selectedPublication ? { ...p, current_stock: newStock } : p
       ));
 
-      // Recarregar movimentações
       loadData();
 
       setQuantity("");
@@ -188,10 +184,6 @@ const Movimentacao = () => {
   };
 
   const handleScanSuccess = (decodedText: string) => {
-    if (navigator.vibrate) {
-      navigator.vibrate(150);
-    }
-    
     setShowScanner(false);
     
     const url = extractUrl(decodedText);
@@ -204,12 +196,13 @@ const Movimentacao = () => {
     
     if (publication) {
       setSelectedPublication(publication.id);
-      // A notificação foi removida conforme solicitado.
+      // Rola a tela para o topo do formulário
+      movementFormRef.current?.scrollIntoView({ behavior: 'smooth' });
     } else {
       setSearchTerm(searchTerm);
       toast({
         title: "Publicação Não Encontrada",
-        description: "Nenhuma publicação corresponde ao QR Code lido. O valor foi inserido na busca para facilitar o cadastro.",
+        description: "Nenhuma publicação corresponde ao QR Code lido. O valor foi inserido na busca.",
         variant: "destructive",
       });
     }
@@ -240,16 +233,15 @@ const Movimentacao = () => {
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
 
-      {/* Movement Form */}
       {canManageStock ? (
-        <Card className="border-2 border-border/70 shadow-lg">
+        <Card ref={movementFormRef} className="border-2 border-border/70 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
               <Truck className="h-6 w-6" />
               Registrar Movimentação de Estoque
             </CardTitle>
             <CardDescription>
-              Selecione la publicación, informe la cantidad y el tipo de movimiento.
+              Selecione a publicação, informe a quantidade e o tipo de movimentação.
             </CardDescription>
             <div className="mt-4">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
@@ -260,7 +252,6 @@ const Movimentacao = () => {
           </CardHeader>
           <CardContent className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            {/* Publication Selector */}
             <div className="space-y-2">
               <Label>Publicação</Label>
               <div className="flex items-center gap-2">
@@ -342,7 +333,6 @@ const Movimentacao = () => {
               )}
             </div>
 
-            {/* Quantity */}
             <div className="space-y-2">
               <Label htmlFor="quantity">Quantidade</Label>
               <Input
@@ -357,7 +347,6 @@ const Movimentacao = () => {
             </div>
           </div>
 
-          {/* Movement Type */}
           <div className="space-y-3">
             <Label>Tipo de Movimentação</Label>
             <div className="flex flex-col sm:flex-row gap-3">
@@ -388,7 +377,6 @@ const Movimentacao = () => {
             </div>
           </div>
 
-          {/* Summary */}
           {selectedPub && quantity && parseInt(quantity) > 0 && (
             <div className="p-4 bg-muted/60 border-2 border-muted rounded-lg">
               <h4 className="font-medium mb-2">Resumo da Movimentação</h4>
@@ -441,7 +429,7 @@ const Movimentacao = () => {
               Movimentação - Apenas Visualização
             </CardTitle>
             <CardDescription>
-              Você tem permissão apenas para visualizar as movimentações. Entre em contato com um administrador para registrar movimentações.
+              Você tem permissão apenas para visualizar as movimentações.
             </CardDescription>
           </CardHeader>
         </Card>
