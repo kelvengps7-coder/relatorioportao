@@ -44,9 +44,13 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-        // Se um QR code for encontrado, para a câmera e chama onScan.
+        // Se um QR code for encontrado, vibra, para a câmera e chama onScan.
         if (code) {
-          stopScan(); // <-- CORREÇÃO APLICADA AQUI
+          // Adiciona feedback tátil para o usuário
+          if (navigator.vibrate) {
+            navigator.vibrate(150);
+          }
+          stopScan();
           onScan(code.data);
           return;
         }
@@ -85,7 +89,7 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
     return () => {
       stopScan();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks-exhaustive-deps
   }, []);
 
   return (
