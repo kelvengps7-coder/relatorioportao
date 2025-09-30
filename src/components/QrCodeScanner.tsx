@@ -1,10 +1,8 @@
 
 import React, { useRef, useEffect } from "react";
 import jsQR from "jsqr";
-import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { Button } from "./ui/button";
-import { X, Upload } from "lucide-react";
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
@@ -15,46 +13,8 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameId = useRef<number>();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const image = new Image();
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        if (typeof e.target?.result === 'string') {
-            image.src = e.target.result;
-        }
-    }
-    reader.readAsDataURL(file);
-
-    image.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = image.width;
-        canvas.height = image.height;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return;
-
-        ctx.drawImage(image, 0, 0, image.width, image.height);
-        const imageData = ctx.getImageData(0, 0, image.width, image.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-        if (code) {
-          onScan(code.data);
-        } else {
-          toast({
-            title: "QR Code não encontrado",
-            description: "Nenhum QR Code foi detectado na imagem.",
-            variant: "destructive",
-          });
-        }
-    }
-  };
-
+  // Função para parar a câmera e o loop de escaneamento
   const stopScan = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       (videoRef.current.srcObject as MediaStream)
@@ -66,6 +26,7 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
     }
   };
 
+  // Loop de escaneamento que roda a cada frame
   const tick = () => {
     if (
       videoRef.current &&
@@ -83,16 +44,20 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
+        // Se um QR code for encontrado, chama onScan e para tudo.
         if (code) {
           onScan(code.data);
-          return; 
+          // O componente será desmontado pelo pai, que chamará stopScan na limpeza.
+          return;
         }
       }
     }
+    // Se nenhum QR code for encontrado, continua o loop.
     animationFrameId.current = requestAnimationFrame(tick);
   };
 
   useEffect(() => {
+    // Função para iniciar a câmera
     const startScan = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -110,59 +75,45 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
           description: "Não foi possível acessar a câmera. Verifique as permissões do seu navegador.",
           variant: "destructive",
         });
-        onClose();
+        onClose(); // Fecha se houver erro
       }
     };
 
     startScan();
 
+    // Função de limpeza: garante que a câmera seja desligada ao desmontar o componente
     return () => {
       stopScan();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center transition-opacity duration-300 animate-in fade-in-0">
-      <div className="relative w-full max-w-md p-4 space-y-4">
-        <div className="aspect-square bg-black rounded-lg overflow-hidden relative shadow-2xl border-2 border-neutral-700">
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            playsInline
-          />
-          <div className="absolute inset-0 z-10 flex items-center justify-center">
-            <div className="w-64 h-64 border-4 border-white/50 rounded-lg animate-pulse" />
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm animate-in fade-in-0">
+      <div className="relative w-[90vw] max-w-sm rounded-xl shadow-2xl border border-gray-200 bg-white overflow-hidden animate-in zoom-in-95">
+        {/* Camada de Vídeo */}
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          playsInline
+        />
+
+        {/* Moldura de Leitura Animada */}
+        <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <div className="w-[75%] h-[75%] border-4 border-green-500 rounded-lg shadow-inner-strong" />
         </div>
         
-        <div className="text-center text-white">
-          <p className="font-semibold text-lg">Aponte a câmera para o QR Code</p>
-          <p className="text-sm text-neutral-300">A leitura será feita automaticamente.</p>
-        </div>
-
-        <div className="flex flex-col items-center gap-4">
-          <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20" onClick={() => fileInputRef.current?.click()}>
-            <Upload className="h-4 w-4 mr-2"/>
-            Fazer upload de uma imagem
-          </Button>
-          <Input 
-            ref={fileInputRef}
-            type="file" 
-            accept="image/*" 
-            onChange={handleFileChange} 
-            className="hidden" 
-          />
-        </div>
+        {/* Botão de Fechar */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-20 bg-white/80 rounded-full p-1.5 shadow-md hover:bg-white transition-all"
+          aria-label="Fechar leitor de QR code"
+        >
+          <X className="h-5 w-5 text-gray-700" />
+        </button>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onClose}
-        className="absolute top-4 right-4 text-white rounded-full bg-black/50 hover:bg-black/70"
-      >
-        <X className="h-6 w-6" />
-      </Button>
+
+      {/* Canvas oculto para processamento */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
