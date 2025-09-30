@@ -32,6 +32,13 @@ interface MovementLocal {
   publications: Publication;
 }
 
+// Função para extrair URL de uma string
+const extractUrl = (text: string): string | null => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const matches = text.match(urlRegex);
+  return matches ? matches[0] : null;
+};
+
 const Movimentacao = () => {
   const { canManageStock, isVisualizador } = useAuth();
   const [publications, setPublications] = useState<Publication[]>([]);
@@ -182,7 +189,14 @@ const Movimentacao = () => {
 
   const handleScanSuccess = (decodedText: string) => {
     setShowScanner(false);
-    const publication = publications.find(p => p.codigoExternoQR === decodedText || p.urlDoFabricante === decodedText);
+    
+    const url = extractUrl(decodedText);
+    const searchTerm = url || decodedText;
+
+    const publication = publications.find(p => 
+      p.codigoExternoQR === searchTerm || 
+      p.urlDoFabricante === searchTerm
+    );
     
     if (publication) {
       setSelectedPublication(publication.id);
@@ -191,7 +205,7 @@ const Movimentacao = () => {
         description: `Publicação "${publication.name}" selecionada.`,
       });
     } else {
-      setSearchTerm(decodedText);
+      setSearchTerm(searchTerm);
       toast({
         title: "Publicação Não Encontrada",
         description: "Nenhuma publicação corresponde ao QR Code lido. O valor foi inserido na busca para facilitar o cadastro.",
