@@ -44,8 +44,9 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-        // Se um QR code for encontrado, chama onScan e para tudo.
+        // Se um QR code for encontrado, para a câmera e chama onScan.
         if (code) {
+          stopScan(); // <-- CORREÇÃO APLICADA AQUI
           onScan(code.data);
           return;
         }
