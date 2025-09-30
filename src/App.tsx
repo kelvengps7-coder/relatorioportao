@@ -26,7 +26,7 @@ const NotFound = lazy(() => import('@/pages/NotFound'));
 
 const queryClient = new QueryClient();
 
-// Layout principal que inclui o cabeçalho e um fallback de suspense mais sutil
+// Layout principal que inclui o cabeçalho
 const MainLayout = ({ children }: { children: React.ReactNode }) => (
   <>
     <AppHeader />
@@ -38,44 +38,39 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => (
   </>
 );
 
-const App = () => (
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <NetworkStatus />
-            <div className="min-h-screen bg-background light mobile-optimized">
-              <Suspense fallback={<LoadingState message="Carregando sistema..." />}>
-                <Routes>
-                  <Route path="/auth" element={<Auth />} />
-                  
-                  {/* Rotas para usuários comuns */}
-                  <Route path="/" element={<ProtectedRoute><MainLayout><Dashboard /></MainLayout></ProtectedRoute>} />
-                  <Route path="/movimentacao" element={<ProtectedRoute><MainLayout><Movimentacao /></MainLayout></ProtectedRoute>} />
-                  <Route path="/estoque" element={<ProtectedRoute><MainLayout><Estoque /></MainLayout></ProtectedRoute>} />
-                  <Route path="/pedidos" element={<ProtectedRoute><MainLayout><PedidosSimple /></MainLayout></ProtectedRoute>} />
-                  
-                  {/* Rotas que exigem permissão de Administrador */}
-                  <Route path="/gerenciar" element={<ProtectedRoute requireAdmin><MainLayout><GerenciarSimplified /></MainLayout></ProtectedRoute>} />
-                  <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><MainLayout><AdminUsers /></MainLayout></ProtectedRoute>} />
-                  <Route path="/auditoria" element={<ProtectedRoute requireAdmin><MainLayout><AuditLogs /></MainLayout></ProtectedRoute>} />
-                  <Route path="/insert-publications" element={<ProtectedRoute requireAdmin><MainLayout><InsertPublications /></MainLayout></ProtectedRoute>} />
-
-                  {/* Rota para visualização de relatórios */}
-                  <Route path="/relatorios-usuarios" element={<ProtectedRoute requireReportAccess><MainLayout><RelatoriosUsuarios /></MainLayout></ProtectedRoute>} />
-                  
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            </div>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
+const App = () => {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <NetworkStatus />
+              <div className="min-h-screen bg-background light mobile-optimized">
+                <Suspense fallback={<LoadingState message="Carregando sistema..." />}>
+                  <Routes>
+                    <Route path="/auth" element={<Auth />} />
+                    <Route path="/" element={<ProtectedRoute><MainLayout><Dashboard /></MainLayout></ProtectedRoute>} />
+                    <Route path="/movimentacao" element={<ProtectedRoute><MainLayout><Movimentacao /></MainLayout></ProtectedRoute>} />
+                    <Route path="/estoque" element={<ProtectedRoute><MainLayout><Estoque /></MainLayout></ProtectedRoute>} />
+                    <Route path="/pedidos" element={<ProtectedRoute><MainLayout><PedidosSimple /></MainLayout></ProtectedRoute>} />
+                    <Route path="/gerenciar" element={<ProtectedRoute requireAdmin><MainLayout><GerenciarSimplified /></MainLayout></ProtectedRoute>} />
+                    <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><MainLayout><AdminUsers /></MainLayout></ProtectedRoute>} />
+                    <Route path="/auditoria" element={<ProtectedRoute requireAdmin><MainLayout><AuditLogs /></MainLayout></ProtectedRoute>} />
+                    <Route path="/insert-publications" element={<ProtectedRoute requireAdmin><MainLayout><InsertPublications /></MainLayout></ProtectedRoute>} />
+                    <Route path="/relatorios-usuarios" element={<ProtectedRoute requireReportAccess><MainLayout><RelatoriosUsuarios /></MainLayout></ProtectedRoute>} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </div>
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+};
 
 export default App;
