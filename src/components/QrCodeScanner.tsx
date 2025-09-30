@@ -4,7 +4,7 @@ import jsQR from "jsqr";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "./ui/button";
-import { X } from "lucide-react";
+import { X, Upload } from "lucide-react";
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
@@ -15,6 +15,7 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameId = useRef<number>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -23,27 +24,34 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
     if (!file) return;
 
     const image = new Image();
-    image.src = URL.createObjectURL(file);
-    await image.decode();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        if (typeof e.target?.result === 'string') {
+            image.src = e.target.result;
+        }
+    }
+    reader.readAsDataURL(file);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
 
-    ctx.drawImage(image, 0, 0, image.width, image.height);
-    const imageData = ctx.getImageData(0, 0, image.width, image.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
+        ctx.drawImage(image, 0, 0, image.width, image.height);
+        const imageData = ctx.getImageData(0, 0, image.width, image.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-    if (code) {
-      onScan(code.data);
-    } else {
-      toast({
-        title: "QR Code não encontrado",
-        description: "Nenhum QR Code foi detectado na imagem.",
-        variant: "destructive",
-      });
+        if (code) {
+          onScan(code.data);
+        } else {
+          toast({
+            title: "QR Code não encontrado",
+            description: "Nenhum QR Code foi detectado na imagem.",
+            variant: "destructive",
+          });
+        }
     }
   };
 
@@ -115,27 +123,47 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex flex-col items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center transition-opacity duration-300 animate-in fade-in-0">
+      <div className="relative w-full max-w-md p-4 space-y-4">
+        <div className="aspect-square bg-black rounded-lg overflow-hidden relative shadow-2xl border-2 border-neutral-700">
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            playsInline
+          />
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <div className="w-64 h-64 border-4 border-white/50 rounded-lg animate-pulse" />
+          </div>
+        </div>
+        
+        <div className="text-center text-white">
+          <p className="font-semibold text-lg">Aponte a câmera para o QR Code</p>
+          <p className="text-sm text-neutral-300">A leitura será feita automaticamente.</p>
+        </div>
+
+        <div className="flex flex-col items-center gap-4">
+          <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-2"/>
+            Fazer upload de uma imagem
+          </Button>
+          <Input 
+            ref={fileInputRef}
+            type="file" 
+            accept="image/*" 
+            onChange={handleFileChange} 
+            className="hidden" 
+          />
+        </div>
+      </div>
       <Button
         variant="ghost"
         size="icon"
         onClick={onClose}
-        className="absolute top-4 right-4 text-white"
+        className="absolute top-4 right-4 text-white rounded-full bg-black/50 hover:bg-black/70"
       >
         <X className="h-6 w-6" />
       </Button>
-      <video
-        ref={videoRef}
-        style={{ width: "100%", maxWidth: "600px", borderRadius: "8px" }}
-        playsInline
-      />
-      <canvas ref={canvasRef} style={{ display: "none" }} />
-      <div className="mt-4 text-center">
-        <p className="mb-2 text-sm text-white">
-          Ou faça upload de uma imagem
-        </p>
-        <Input type="file" accept="image/*" onChange={handleFileChange} />
-      </div>
+      <canvas ref={canvasRef} className="hidden" />
     </div>
   );
 };
