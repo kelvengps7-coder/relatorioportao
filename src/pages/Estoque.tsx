@@ -219,7 +219,7 @@ const Estoque = () => {
                 />
               </div>
               <div className="relative">
-                <Button onClick={() => setShowScanner(true)} variant="outline" className="w-full md:w-auto">
+                <Button onClick={() => setShowScanner(true)} className="w-full md:w-auto">
                   <Camera className="h-4 w-4" />
                 </Button>
                 {showScanner && (

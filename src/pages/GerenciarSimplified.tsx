@@ -159,13 +159,12 @@ const GerenciarSimplified = () => {
                       setSearchTerm(e.target.value);
                       setScanResult(null);
                     }}
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-20"
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
                     <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-7 w-7"
+                      size="sm"
+                      className="h-7"
                       onClick={handleOpenCamera}
                     >
                       <Camera className="h-4 w-4" />
