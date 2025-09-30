@@ -271,9 +271,11 @@ const Movimentacao = () => {
                       aria-expanded={open}
                       className="w-full justify-between h-11 text-foreground hover:text-foreground focus:text-foreground border-2 border-border/70 hover:border-border/80 bg-background hover:bg-background shadow-sm hover:shadow-md"
                     >
-                      {selectedPub
-                        ? `[${selectedPub.code}] ${selectedPub.name}`
-                        : "Buscar publicação..."}
+                      <span className="truncate">
+                        {selectedPub
+                          ? `[${selectedPub.code}] ${selectedPub.name}`
+                          : "Buscar publicação..."}
+                      </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
