@@ -47,7 +47,6 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         // Se um QR code for encontrado, chama onScan e para tudo.
         if (code) {
           onScan(code.data);
-          // O componente será desmontado pelo pai, que chamará stopScan na limpeza.
           return;
         }
       }
@@ -89,7 +88,7 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm animate-in fade-in-0">
+    <div className="fixed inset-0 z-50 flex justify-center items-start md:items-center pt-12 md:pt-0 bg-white/70 backdrop-blur-sm animate-in fade-in-0">
       <div className="relative w-[90vw] max-w-sm rounded-xl shadow-2xl border border-gray-200 bg-white overflow-hidden animate-in zoom-in-95">
         {/* Camada de Vídeo */}
         <video
