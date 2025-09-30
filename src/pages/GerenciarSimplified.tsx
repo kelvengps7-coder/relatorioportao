@@ -62,12 +62,12 @@ const GerenciarSimplified = () => {
   const [urlPublication, setUrlPublication] = useState<Publication | null>(null);
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
   const [publicationUrl, setPublicationUrl] = useState("");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const [processing, setProcessing] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{url: string, title: string} | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -365,6 +365,11 @@ const GerenciarSimplified = () => {
       </Tabs>
 
       {/* Dialogs */}
+      {isScannerOpen && (
+          <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+              <QrCodeScanner onScan={handleScanSuccess} />
+          </Dialog>
+      )}
       {canCreate && <PublicationFormDialog open={showNewForm} onOpenChange={setShowNewForm} onSuccess={loadPublications} />}
       {canEdit && <PublicationFormDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} publication={editingPublication} onSuccess={() => { loadPublications(); setEditDialogOpen(false); }} />}
       
@@ -395,8 +400,6 @@ const GerenciarSimplified = () => {
         </DialogContent>
       </Dialog>
       
-      {isScannerOpen && <QrCodeScanner onScan={handleScanSuccess} onClose={() => setIsScannerOpen(false)} />}
-
       <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>Capa: {zoomedImage?.title}</DialogTitle></DialogHeader>
