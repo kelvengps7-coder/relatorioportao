@@ -218,9 +218,17 @@ const Estoque = () => {
                   className="pl-10"
                 />
               </div>
-              <Button onClick={() => setShowScanner(true)} variant="outline" className="md:w-auto">
-                <Camera className="h-4 w-4" />
-              </Button>
+              <div className="relative">
+                <Button onClick={() => setShowScanner(true)} variant="outline" className="w-full md:w-auto">
+                  <Camera className="h-4 w-4" />
+                </Button>
+                {showScanner && (
+                  <QrCodeScanner
+                    onScan={handleScanSuccess}
+                    onClose={() => setShowScanner(false)}
+                  />
+                )}
+              </div>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="w-full md:w-[200px]">
                   <SelectValue placeholder="Todas as categorias" />
@@ -293,13 +301,6 @@ const Estoque = () => {
           )}
         </CardContent>
       </Card>
-      
-      {showScanner && (
-        <QrCodeScanner
-          onScan={handleScanSuccess}
-          onClose={() => setShowScanner(false)}
-        />
-      )}
 
       <Dialog open={imagePreviewOpen} onOpenChange={setImagePreviewOpen}>
         <DialogContent className="max-w-4xl">

@@ -161,14 +161,16 @@ const GerenciarSimplified = () => {
                     }}
                     className="pl-10 pr-10"
                   />
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
-                    onClick={handleOpenCamera} // <-- Ação direta aqui
-                  >
-                    <Camera className="h-4 w-4" />
-                  </Button>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7"
+                      onClick={handleOpenCamera}
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <Select 
                   value={categoryFilter} 
@@ -190,6 +192,14 @@ const GerenciarSimplified = () => {
                   Exportar CSV
                 </Button>
               </div>
+              {isScannerOpen && (
+                <div className="relative">
+                  <QrCodeScanner
+                    onScan={handleScanSuccess}
+                    onClose={() => setIsScannerOpen(false)}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -250,13 +260,6 @@ const GerenciarSimplified = () => {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {isScannerOpen && (
-        <QrCodeScanner
-          onScan={handleScanSuccess}
-          onClose={() => setIsScannerOpen(false)}
-        />
-      )}
       
       {/* Diálogos */}
       <PublicationFormDialog open={showNewForm} onOpenChange={setShowNewForm} onSuccess={loadPublications} />

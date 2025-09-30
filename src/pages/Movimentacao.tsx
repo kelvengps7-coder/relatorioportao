@@ -254,7 +254,7 @@ const Movimentacao = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             <div className="space-y-2">
               <Label>Publicação</Label>
-              <div className="flex items-center gap-2">
+              <div className="relative flex items-center gap-2">
                 <Popover open={open} onOpenChange={setOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -323,6 +323,12 @@ const Movimentacao = () => {
                 <Button variant="outline" onClick={() => setShowScanner(true)} className="h-11">
                   <Camera className="h-5 w-5" />
                 </Button>
+                {showScanner && (
+                  <QrCodeScanner
+                    onScan={handleScanSuccess}
+                    onClose={() => setShowScanner(false)}
+                  />
+                )}
               </div>
 
               {selectedPub && (
@@ -512,13 +518,6 @@ const Movimentacao = () => {
           )}
         </CardContent>
       </Card>
-      
-      {showScanner && (
-        <QrCodeScanner
-          onScan={handleScanSuccess}
-          onClose={() => setShowScanner(false)}
-        />
-      )}
       
       {/* Image Zoom Dialog */}
       <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>

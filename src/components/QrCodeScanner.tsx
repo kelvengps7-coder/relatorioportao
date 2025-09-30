@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState } from "react";
 import jsQR from "jsqr";
 import { X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface QrCodeScannerProps {
   onScan: (result: string) => void;
@@ -12,11 +13,11 @@ interface QrCodeScannerProps {
 const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scannerContainerRef = useRef<HTMLDivElement>(null); // Ref para o contêiner principal
+  const scannerContainerRef = useRef<HTMLDivElement>(null);
   const animationFrameId = useRef<number>();
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const isMobile = useIsMobile();
 
-  // Função para parar a câmera e o loop de escaneamento
   const stopScan = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       (videoRef.current.srcObject as MediaStream)
@@ -28,7 +29,6 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
     }
   };
 
-  // Loop de escaneamento que roda a cada frame
   const tick = () => {
     if (
       videoRef.current &&
@@ -47,35 +47,20 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
         if (code) {
-          if (animationFrameId.current) {
-            cancelAnimationFrame(animationFrameId.current);
-            animationFrameId.current = undefined;
-          }
-          
           stopScan();
-
-          if (navigator.vibrate) {
-            navigator.vibrate(120);
-          }
-
+          if (navigator.vibrate) navigator.vibrate(120);
           setShowSuccessMessage(true);
-
-          setTimeout(() => {
-            onScan(code.data);
-          }, 1500);
-
-          return;
+          setTimeout(() => onScan(code.data), 1500);
+        } else if (animationFrameId.current) {
+          animationFrameId.current = requestAnimationFrame(tick);
         }
       }
-    }
-    
-    if (animationFrameId.current !== undefined) {
+    } else if (animationFrameId.current) {
       animationFrameId.current = requestAnimationFrame(tick);
     }
   };
 
   useEffect(() => {
-    // Função para iniciar a câmera
     const startScan = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -86,11 +71,10 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
           videoRef.current.play();
           animationFrameId.current = requestAnimationFrame(tick);
 
-          // Rola a tela para o scanner assim que a câmera é ativada
-          if (scannerContainerRef.current) {
+          if (scannerContainerRef.current && !isMobile) {
             scannerContainerRef.current.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center'
+              behavior: "smooth",
+              block: "center",
             });
           }
         }
@@ -98,7 +82,7 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         console.error("Erro ao acessar a câmera:", err);
         toast({
           title: "Erro de Câmera",
-          description: "Não foi possível acessar a câmera. Verifique as permissões do seu navegador.",
+          description: "Não foi possível acessar a câmera.",
           variant: "destructive",
         });
         onClose();
@@ -106,28 +90,24 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
     };
 
     startScan();
+    return () => stopScan();
+  }, [isMobile, onClose]);
 
-    return () => {
-      stopScan();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const containerClasses = isMobile
+    ? "absolute top-full left-0 right-0 mt-4 z-50"
+    : "fixed inset-0 z-50 flex justify-center items-center bg-white/70 backdrop-blur-sm animate-in fade-in-0";
 
   return (
-    <div 
-      ref={scannerContainerRef} // Atribui a ref ao contêiner
-      className="fixed inset-0 z-50 flex justify-center items-start md:items-center pt-12 md:pt-0 bg-white/70 backdrop-blur-sm animate-in fade-in-0">
-      <div className="relative w-[90vw] max-w-sm rounded-xl shadow-2xl border border-gray-200 bg-white overflow-hidden animate-in zoom-in-95">
+    <div ref={scannerContainerRef} className={containerClasses}>
+      <div className="relative w-full max-w-sm rounded-xl shadow-2xl border border-gray-200 bg-white overflow-hidden animate-in zoom-in-95">
         <video
           ref={videoRef}
           className="w-full h-full object-cover"
           playsInline
         />
-
         <div className="absolute inset-0 z-10 flex items-center justify-center">
-            <div className="w-[75%] h-[75%] border-4 border-green-500 rounded-lg shadow-inner-strong" />
+          <div className="w-[75%] h-[75%] border-4 border-green-500 rounded-lg shadow-inner-strong" />
         </div>
-        
         <button
           onClick={onClose}
           className="absolute top-3 right-3 z-20 bg-white/80 rounded-full p-1.5 shadow-md hover:bg-white transition-all"
@@ -135,14 +115,12 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         >
           <X className="h-5 w-5 text-gray-700" />
         </button>
-
         {showSuccessMessage && (
           <div className="absolute top-10 inset-x-0 mx-auto w-fit bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-5">
             ✅ QR Code lido com sucesso!
           </div>
         )}
       </div>
-
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
