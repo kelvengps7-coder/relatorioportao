@@ -188,6 +188,11 @@ const Movimentacao = () => {
   };
 
   const handleScanSuccess = (decodedText: string) => {
+    // Vibra o dispositivo assim que o scan for bem-sucedido
+    if (navigator.vibrate) {
+      navigator.vibrate(150);
+    }
+    
     setShowScanner(false);
     
     const url = extractUrl(decodedText);

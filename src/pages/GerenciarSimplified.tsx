@@ -206,6 +206,11 @@ const GerenciarSimplified = () => {
   const categories = Array.from(new Set(publications.map(p => p.category))).sort();
 
   const handleScanSuccess = (scannedUrl: string) => {
+    // Vibra o dispositivo assim que o scan for bem-sucedido
+    if (navigator.vibrate) {
+      navigator.vibrate(150);
+    }
+    
     setIsScannerOpen(false);
     
     if (!isValidUrl(scannedUrl)) {
