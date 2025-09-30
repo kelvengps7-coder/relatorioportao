@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import jsQR from "jsqr";
-import { X } from "lucide-react";
+import { X, Camera } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -20,12 +20,13 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
 
   const stopScan = () => {
     if (videoRef.current && videoRef.current.srcObject) {
-      (videoRef.current.srcObject as MediaStream)
-        .getTracks()
-        .forEach((track) => track.stop());
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
     }
     if (animationFrameId.current) {
       cancelAnimationFrame(animationFrameId.current);
+      animationFrameId.current = undefined;
     }
   };
 
@@ -51,11 +52,12 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
           if (navigator.vibrate) navigator.vibrate(120);
           setShowSuccessMessage(true);
           setTimeout(() => onScan(code.data), 1500);
-        } else if (animationFrameId.current) {
-          animationFrameId.current = requestAnimationFrame(tick);
+          return;
         }
       }
-    } else if (animationFrameId.current) {
+    }
+    
+    if (animationFrameId.current !== undefined) {
       animationFrameId.current = requestAnimationFrame(tick);
     }
   };
@@ -95,19 +97,39 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
 
   const containerClasses = isMobile
     ? "absolute top-full left-0 right-0 mt-4 z-50"
-    : "fixed inset-0 z-50 flex justify-center items-center bg-white/70 backdrop-blur-sm animate-in fade-in-0";
+    : "fixed inset-0 z-50 flex justify-center items-center bg-black/80 backdrop-blur-sm animate-in fade-in-0";
 
   return (
     <div ref={scannerContainerRef} className={containerClasses}>
-      <div className="relative w-full max-w-sm rounded-xl shadow-2xl border border-gray-200 bg-white overflow-hidden animate-in zoom-in-95">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          playsInline
-        />
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <div className="w-[75%] h-[75%] border-4 border-green-500 rounded-lg shadow-inner-strong" />
-        </div>
+      <div className="relative w-full max-w-sm rounded-xl bg-transparent overflow-hidden animate-in zoom-in-95">
+        {!showSuccessMessage && (
+          <>
+            <video
+              ref={videoRef}
+              className="w-full h-auto object-cover rounded-lg"
+              playsInline
+            />
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center">
+              <div className="w-[80%] aspect-square rounded-lg relative overflow-hidden">
+                {/* Overlay with cutout */}
+                <div className="absolute inset-0" style={{ boxShadow: '0 0 0 100vmax rgba(0,0,0,0.5)' }}></div>
+                
+                {/* Corner Borders */}
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-lg"></div>
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-lg"></div>
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-lg"></div>
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-lg"></div>
+                
+                {/* Scanning Laser */}
+                <div className="scanner-laser"></div>
+              </div>
+              <p className="text-white text-center mt-4 text-lg font-semibold">
+                Aponte a câmera para o QR Code
+              </p>
+            </div>
+          </>
+        )}
+        
         <button
           onClick={onClose}
           className="absolute top-3 right-3 z-20 bg-white/80 rounded-full p-1.5 shadow-md hover:bg-white transition-all"
@@ -115,9 +137,14 @@ const QrCodeScanner: React.FC<QrCodeScannerProps> = ({ onScan, onClose }) => {
         >
           <X className="h-5 w-5 text-gray-700" />
         </button>
+
         {showSuccessMessage && (
-          <div className="absolute top-10 inset-x-0 mx-auto w-fit bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-5">
-            ✅ QR Code lido com sucesso!
+          <div className="flex flex-col items-center justify-center bg-green-500 text-white w-full py-12 rounded-lg">
+            <div className="text-center">
+              <svg className="w-16 h-16 mx-auto mb-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <h3 className="text-xl font-bold">QR Code Lido!</h3>
+              <p className="text-sm">Processando...</p>
+            </div>
           </div>
         )}
       </div>

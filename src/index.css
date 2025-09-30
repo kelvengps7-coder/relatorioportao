@@ -441,3 +441,24 @@ All colors MUST be HSL.
     color: hsl(var(--foreground)) !important;
   }
 }
+
+/* Animação do Scanner */
+.scanner-laser {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: red;
+  box-shadow: 0 0 10px red;
+  animation: scanning 2s infinite linear;
+}
+
+@keyframes scanning {
+  0% {
+    top: 0;
+  }
+  100% {
+    top: 100%;
+  }
+}
