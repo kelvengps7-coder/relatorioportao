@@ -74,6 +74,14 @@ const GerenciarSimplified = () => {
     loadPublications();
   }, []);
 
+  // Efeito para rolar a página para o topo ao abrir o scanner
+  useEffect(() => {
+    if (isScannerOpen) {
+      window.scrollTo(0, 0);
+    }
+  }, [isScannerOpen]);
+
+
   const loadPublications = async () => {
     try {
       setLoading(true);
@@ -364,18 +372,13 @@ const GerenciarSimplified = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Dialogs */}
-      <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-        <DialogContent>
-           <DialogHeader>
-            <DialogTitle>Aponte para o QR Code</DialogTitle>
-          </DialogHeader>
-          <QrCodeScanner
-            onScan={handleScanSuccess}
-            onClose={() => setIsScannerOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* Renderiza o Scanner como um componente de tela cheia */}
+      {isScannerOpen && (
+        <QrCodeScanner
+          onScan={handleScanSuccess}
+          onClose={() => setIsScannerOpen(false)}
+        />
+      )}
       
       {canCreate && <PublicationFormDialog open={showNewForm} onOpenChange={setShowNewForm} onSuccess={loadPublications} />}
       {canEdit && <PublicationFormDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} publication={editingPublication} onSuccess={() => { loadPublications(); setEditDialogOpen(false); }} />}
