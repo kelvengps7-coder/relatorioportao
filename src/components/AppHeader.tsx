@@ -58,7 +58,6 @@ const AppHeader = () => {
     { name: "Estoque", href: "/estoque", icon: Package },
     { name: "Pedidos", href: "/pedidos", icon: ShoppingCart },
     { name: "Gerenciar", href: "/gerenciar", icon: FolderOpen },
-    ...(isAdmin ? [{ name: "Usuários", href: "/admin/usuarios", icon: Users }] : []),
   ];
 
   const isActiveRoute = (href: string) => {
@@ -201,6 +200,14 @@ const AppHeader = () => {
                     </div>
                     
                     <div className="p-2">
+                    {isAdmin && (
+                        <DropdownMenuItem asChild className="hover:bg-foreground/5 rounded-lg">
+                          <NavLink to="/admin/usuarios" className="flex items-center gap-3 px-3 py-3">
+                            <Users className="h-5 w-5 text-foreground" />
+                            <span className="font-medium">Usuários</span>
+                          </NavLink>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem asChild className="hover:bg-foreground/5 rounded-lg">
                         <NavLink to="/relatorios-usuarios" className="flex items-center gap-3 px-3 py-3">
                           <BarChart3 className="h-5 w-5 text-foreground" />
