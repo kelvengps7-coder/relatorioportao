@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,25 +79,67 @@ const GerenciarSimplified = () => {
       const { data, error } = await supabase.from('publications').select('*').order('category, name');
       if (error) throw error;
       setPublications(data || []);
+      toast({ title: "Sucesso", description: "Publicações carregadas." });
     } catch (error) {
       console.error('Erro ao carregar publicações:', error);
+      toast({ title: "Erro", description: "Não foi possível carregar as publicações.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
+  
+  const handleDeletePublication = async () => {
+    if (!publicationToDelete) return;
+    try {
+      setProcessing(true);
+      const { error } = await supabase.from('publications').delete().eq('id', publicationToDelete.id);
+      if (error) throw error;
+      toast({ title: "Sucesso", description: "Publicação excluída." });
+      setDeleteDialogOpen(false);
+      loadPublications();
+    } catch (error) {
+      console.error('Erro ao excluir publicação:', error);
+      toast({ title: "Erro", description: "Não foi possível excluir a publicação.", variant: "destructive" });
+    } finally {
+      setProcessing(false);
+      setPublicationToDelete(null);
+    }
+  };
 
-  const handleDeletePublication = async () => { /* ... */ };
-  const handleSaveUrl = async () => { /* ... */ };
+  const handleSaveUrl = async () => {
+    if (!urlPublication || !isValidUrl(publicationUrl)) {
+      toast({ title: "URL Inválida", description: "Por favor, insira uma URL válida.", variant: "destructive" });
+      return;
+    }
+    try {
+      setProcessing(true);
+      const { error } = await supabase
+        .from('publications')
+        .update({ urlDoFabricante: publicationUrl })
+        .eq('id', urlPublication.id);
+      if (error) throw error;
+      toast({ title: "Sucesso", description: "URL salva com sucesso." });
+      setUrlDialogOpen(false);
+      loadPublications();
+    } catch (error) {
+      console.error('Erro ao salvar URL:', error);
+      toast({ title: "Erro", description: "Não foi possível salvar a URL.", variant: "destructive" });
+    } finally {
+      setProcessing(false);
+      setUrlPublication(null);
+      setPublicationUrl("");
+    }
+  };
+
   const handleExportCSV = async () => { /* ... */ };
 
   const filteredPublications = publications.filter(pub => {
     const normalizedSearch = normalizeText(searchTerm);
+    const matches = (text: string) => normalizeText(text).includes(normalizedSearch);
+    
     return (
       (categoryFilter === "all" || pub.category === categoryFilter) &&
-      (
-        normalizeText(pub.name).includes(normalizedSearch) ||
-        normalizeText(pub.code).includes(normalizedSearch)
-      )
+      (matches(pub.name) || matches(pub.code) || matches(pub.urlDoFabricante))
     );
   });
   
@@ -108,7 +150,9 @@ const GerenciarSimplified = () => {
     setIsScannerOpen(false);
     
     const foundPublication = publications.find(pub => 
-      pub.urlDoFabricante === scannedValue || pub.codigoExternoQR === scannedValue
+      pub.urlDoFabricante === scannedValue || 
+      pub.codigoExternoQR === scannedValue ||
+      pub.code === scannedValue
     );
 
     if (foundPublication) {
@@ -123,15 +167,14 @@ const GerenciarSimplified = () => {
       setSearchTerm(scannedValue);
       toast({
         title: "Publicação Não Encontrada",
-        description: "O código lido foi inserido no campo de busca para referência.",
+        description: "O código lido foi inserido no campo de busca.",
         variant: "destructive",
       });
     }
   };
 
-  // Função direta para abrir a câmera no topo
   const handleOpenCamera = () => {
-    window.scrollTo({ top: 0, behavior: 'instant' }); // Salto instantâneo para o topo
+    window.scrollTo({ top: 0, behavior: 'instant' });
     setIsScannerOpen(true);
   };
   
@@ -192,7 +235,7 @@ const GerenciarSimplified = () => {
                 </Button>
               </div>
               {isScannerOpen && (
-                <div className="relative">
+                <div className="relative mt-4">
                   <QrCodeScanner
                     onScan={handleScanSuccess}
                     onClose={() => setIsScannerOpen(false)}
@@ -215,7 +258,16 @@ const GerenciarSimplified = () => {
               ) : (
                 <div className="rounded-lg border">
                    <Table>
-                     {/* ... Table Header ... */}
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-20">Capa</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Estoque</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
                       {displayedPublications.map((pub) => (
                         <TableRow key={pub.id}>
@@ -240,7 +292,7 @@ const GerenciarSimplified = () => {
                                 <DropdownMenuItem onClick={() => { setEditingPublication(pub); setEditDialogOpen(true); }}>
                                   <Edit className="mr-2 h-4 w-4" />Editar
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { setUrlPublication(pub); setUrlDialogOpen(true); setPublicationUrl(pub.urlDoFabricante || ""); }}>
+                                <DropdownMenuItem onClick={() => { setUrlPublication(pub); setPublicationUrl(pub.urlDoFabricante || ""); setUrlDialogOpen(true); }}>
                                   <Link className="mr-2 h-4 w-4" />Cadastrar URL
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => { setPublicationToDelete(pub); setDeleteDialogOpen(true); }} className="text-destructive">
@@ -263,7 +315,62 @@ const GerenciarSimplified = () => {
       {/* Diálogos */}
       <PublicationFormDialog open={showNewForm} onOpenChange={setShowNewForm} onSuccess={loadPublications} />
       <PublicationFormDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} publication={editingPublication} onSuccess={() => { loadPublications(); setEditDialogOpen(false); }} />
-      {/* ... outros diálogos ... */}
+      
+      <Dialog open={urlDialogOpen} onOpenChange={setUrlDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cadastrar URL para "{urlPublication?.name}"</DialogTitle>
+            <DialogDescription>
+              Insira a URL do fabricante ou outra URL de referência para esta publicação.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="pub-url">URL</Label>
+            <Input 
+              id="pub-url" 
+              value={publicationUrl}
+              onChange={(e) => setPublicationUrl(e.target.value)}
+              placeholder="https://exemplo.com/produto"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUrlDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveUrl} disabled={processing}>
+              {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir a publicação "{publicationToDelete?.name}"? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeletePublication} disabled={processing}>
+              {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {zoomedImage && (
+        <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>{zoomedImage.title}</DialogTitle>
+            </DialogHeader>
+            <img src={zoomedImage.url} alt={zoomedImage.title} className="w-full h-auto rounded-md" />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

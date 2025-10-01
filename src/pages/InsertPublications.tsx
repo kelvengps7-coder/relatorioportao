@@ -92,8 +92,8 @@ const publicationsData: PublicationFormData[] = [
   { code: "bt", name: "Testemunho Cabal", category: "Livros", current_stock: 0 },
 
   // Revistas — Despertai!
-  { code: "g24.1", name: "Despertai! Nº", category: "Revistas — Despertai!", current_stock: 114 },
-  { code: "g23.1", name: "Despertai! Nº", category: "Revistas — Despertai!", current_stock: 0 },
+  { code: "g24.1", name: "Despertai! Nº 1 2024", category: "Revistas — Despertai!", current_stock: 114 },
+  { code: "g23.1", name: "Despertai! Nº 1 2023", category: "Revistas — Despertai!", current_stock: 0 },
   { code: "g18.1", name: "Despertai! Nº 1 2018", category: "Revistas — Despertai!", current_stock: 0 },
   { code: "g19.1", name: "Despertai! Nº 1 2019", category: "Revistas — Despertai!", current_stock: 0 },
   { code: "g20.1", name: "Despertai! Nº 1 2020", category: "Revistas — Despertai!", current_stock: 0 },
@@ -109,7 +109,7 @@ const publicationsData: PublicationFormData[] = [
   { code: "g21.3", name: "Despertai! Nº 3 2021", category: "Revistas — Despertai!", current_stock: 90 },
 
   // Revistas — Sentinela
-  { code: "wp24.1", name: "Sentinela Nº", category: "Revistas — Sentinela", current_stock: 0 },
+  { code: "wp24.1", name: "Sentinela Nº 1 2024", category: "Revistas — Sentinela", current_stock: 0 },
   { code: "wp18.1", name: "Sentinela Nº 1 2018", category: "Revistas — Sentinela", current_stock: 0 },
   { code: "wp19.1", name: "Sentinela Nº 1 2019", category: "Revistas — Sentinela", current_stock: 41 },
   { code: "wp20.1", name: "Sentinela Nº 1 2020", category: "Revistas — Sentinela", current_stock: 0 },
