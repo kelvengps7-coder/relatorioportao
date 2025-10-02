@@ -113,9 +113,10 @@ const GerenciarSimplified = () => {
     }
     try {
       setProcessing(true);
+      const encodedUrl = encodeURIComponent(publicationUrl);
       const { error } = await supabase
         .from('publications')
-        .update({ urlDoFabricante: publicationUrl })
+        .update({ urlDoFabricante: encodedUrl })
         .eq('id', urlPublication.id);
       if (error) throw error;
       toast({ title: "Sucesso", description: "URL salva com sucesso." });
