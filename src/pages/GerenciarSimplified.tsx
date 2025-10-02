@@ -55,7 +55,7 @@ const GerenciarSimplified = () => {
   
   const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<Publication | null>(null);
   const [publicationToDelete, setPublicationToDelete] = useState<Publication | null>(null);
   
   const [urlPublication, setUrlPublication] = useState<Publication | null>(null);
@@ -112,10 +112,9 @@ const GerenciarSimplified = () => {
     }
     try {
       setProcessing(true);
-      const encodedUrl = encodeURIComponent(publicationUrl);
       const { error } = await supabase
         .from('publications')
-        .update({ urlDoFabricante: encodedUrl })
+        .update({ urlDoFabricante: publicationUrl })
         .eq('id', urlPublication.id);
       if (error) throw error;
       toast({ title: "Sucesso", description: "URL salva com sucesso." });
@@ -135,11 +134,12 @@ const GerenciarSimplified = () => {
 
   const filteredPublications = publications.filter(pub => {
     const normalizedSearch = normalizeText(searchTerm);
-    const matches = (text: string) => normalizeText(text).includes(normalizedSearch);
     
     return (
       (categoryFilter === "all" || pub.category === categoryFilter) &&
-      (matches(pub.name) || matches(pub.code) || matches(pub.urlDoFabricante))
+      (normalizeText(pub.name).includes(normalizedSearch) || 
+       normalizeText(pub.code).includes(normalizedSearch) || 
+       normalizeText(pub.urlDoFabricante).includes(normalizedSearch))
     );
   });
   
