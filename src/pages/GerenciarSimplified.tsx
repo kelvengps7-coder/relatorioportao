@@ -79,7 +79,6 @@ const GerenciarSimplified = () => {
       const { data, error } = await supabase.from('publications').select('*').order('category, name');
       if (error) throw error;
       setPublications(data || []);
-      toast({ title: "Sucesso", description: "Publicações carregadas." });
     } catch (error) {
       console.error('Erro ao carregar publicações:', error);
       toast({ title: "Erro", description: "Não foi possível carregar as publicações.", variant: "destructive" });
