@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from "@/integrations/supabase/client";
-import { Publication, PUBLICATION_CATEGORIES } from "@/types";
+import { Publication } from "@/types"; // Removido PUBLICATION_CATEGORIES
 import { Upload, X, Image, Link } from "lucide-react";
 
 interface PublicationFormDialogProps {
@@ -52,11 +52,29 @@ export const PublicationFormDialog = ({
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]); // Novo estado para categorias
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { logAction, showSuccessMessage } = useAuditLog();
 
   useEffect(() => {
+    // Carregar categorias do Supabase buscando publicações existentes
+    const fetchCategories = async () => {
+      const { data, error } = await supabase
+        .from('publications')
+        .select('category');
+
+      if (error) {
+        console.error("Erro ao buscar categorias:", error);
+        toast({ title: "Erro", description: "Não foi possível carregar as categorias.", variant: "destructive" });
+      } else {
+        const uniqueCategories = Array.from(new Set(data.map(pub => pub.category)))
+                                      .filter(category => category !== null && category !== undefined) as string[];
+        setCategories(uniqueCategories.sort());
+      }
+    };
+    fetchCategories();
+
     if (publication) {
       setFormData({
         code: publication.code || "",
@@ -79,7 +97,7 @@ export const PublicationFormDialog = ({
       setImagePreview(null);
     }
     setImageFile(null);
-  }, [publication, open]);
+  }, [publication, open, toast]); // Adicionado toast como dependência
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -211,7 +229,7 @@ export const PublicationFormDialog = ({
             <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
               <SelectTrigger><SelectValue placeholder="Selecione uma categoria" /></SelectTrigger>
               <SelectContent>
-                {PUBLICATION_CATEGORIES.map((category) => (<SelectItem key={category} value={category}>{category}</SelectItem>))}
+                {categories.map((category) => (<SelectItem key={category} value={category}>{category}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>

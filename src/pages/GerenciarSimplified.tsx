@@ -22,7 +22,7 @@ import { Publication } from "@/types";
 
 const normalizeText = (text: string = ''): string => {
   if (!text) return '';
-  return text
+  return decodeURIComponent(text)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase();
@@ -55,7 +55,7 @@ const GerenciarSimplified = () => {
   
   const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<Publication | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false); // Corrigido para boolean
   const [publicationToDelete, setPublicationToDelete] = useState<Publication | null>(null);
   
   const [urlPublication, setUrlPublication] = useState<Publication | null>(null);
@@ -78,7 +78,13 @@ const GerenciarSimplified = () => {
       setLoading(true);
       const { data, error } = await supabase.from('publications').select('*').order('category, name');
       if (error) throw error;
-      setPublications(data || []);
+
+      // Decodificar urlDoFabricante ao carregar as publicações
+      const decodedData = data.map(pub => ({
+        ...pub,
+        urlDoFabricante: pub.urlDoFabricante ? decodeURIComponent(pub.urlDoFabricante) : null,
+      }));
+      setPublications(decodedData || []);
     } catch (error) {
       console.error('Erro ao carregar publicações:', error);
       toast({ title: "Erro", description: "Não foi possível carregar as publicações.", variant: "destructive" });
@@ -149,10 +155,12 @@ const GerenciarSimplified = () => {
   const handleScanSuccess = (scannedValue: string) => {
     setIsScannerOpen(false);
     
-    const foundPublication = publications.find(pub => 
-      pub.urlDoFabricante === scannedValue || 
-      pub.codigoExternoQR === scannedValue ||
-      pub.code === scannedValue
+    const normalizedScannedValue = normalizeText(scannedValue); // Normaliza o valor escaneado
+
+    const foundPublication = publications.find(pub =>
+      normalizeText(pub.urlDoFabricante).includes(normalizedScannedValue) || // Verifica se a URL normalizada inclui o valor escaneado
+      normalizeText(pub.codigoExternoQR).includes(normalizedScannedValue) ||
+      normalizeText(pub.code).includes(normalizedScannedValue)
     );
 
     if (foundPublication) {
@@ -164,7 +172,7 @@ const GerenciarSimplified = () => {
       });
     } else {
       setScanResult(null);
-      setSearchTerm(scannedValue);
+      setSearchTerm(scannedValue); // Mantém o valor original escaneado no campo de busca
       toast({
         title: "Publicação Não Encontrada",
         description: "O código lido foi inserido no campo de busca.",
@@ -188,7 +196,10 @@ const GerenciarSimplified = () => {
       </div>
 
       <Tabs defaultValue="catalog" className="w-full">
-        {/* ... */}
+        <TabsList className="grid w-fit grid-cols-2">
+          <TabsTrigger value="catalog">Catálogo</TabsTrigger>
+          <TabsTrigger value="new">Nova Publicação</TabsTrigger>
+        </TabsList>
         <TabsContent value="catalog" className="space-y-6 mt-6">
           <Card>
             <CardContent className="p-6">
@@ -229,6 +240,18 @@ const GerenciarSimplified = () => {
                     {categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button><Plus className="mr-2 h-4 w-4" /> Adicionar</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setShowNewForm(true)}>
+                      <Plus className="mr-2 h-4 w-4" /> Adicionar Nova Publicação
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <Button onClick={handleExportCSV} variant="outline" className="w-full md:w-auto" disabled={isExporting}>
                   {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
                   Exportar CSV

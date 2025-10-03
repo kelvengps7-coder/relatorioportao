@@ -35,12 +35,3 @@ export interface Pedido {
     current_stock: "number";
   }
 }
-
-// Lista de categorias de publicações
-export const PUBLICATION_CATEGORIES = [
-  "Livros",
-  "Revistas",
-  "Folhetos",
-  "Bíblias",
-  "Outros",
-];
