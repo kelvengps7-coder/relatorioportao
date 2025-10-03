@@ -18,16 +18,6 @@ interface PublicationFormDialogProps {
   onSuccess: () => void;
 }
 
-const isValidUrl = (urlString: string): boolean => {
-  if (!urlString) return true; // Allow empty URL
-  try {
-    new URL(urlString);
-    return true;
-  } catch (error) {
-    return false;
-  }
-};
-
 export const PublicationFormDialog = ({ 
   open, 
   onOpenChange, 
@@ -41,12 +31,11 @@ export const PublicationFormDialog = ({
   }
 
   const [formData, setFormData] = useState({
-    code: "",
     name: "",
     category: "",
+    code: "", // Unificamos a URL para o campo 'code'
     current_stock: 0,
     image_url: "",
-    urlDoFabricante: ""
   });
   
   const [loading, setLoading] = useState(false);
@@ -59,22 +48,20 @@ export const PublicationFormDialog = ({
   useEffect(() => {
     if (publication) {
       setFormData({
-        code: publication.code || "",
         name: publication.name || "",
         category: publication.category || "",
+        code: publication.code || "", // Carrega a URL do campo 'code'
         current_stock: publication.current_stock || 0,
         image_url: publication.image_url || "",
-        urlDoFabricante: publication.urlDoFabricante || ""
       });
       setImagePreview(publication.image_url || null);
     } else {
       setFormData({
-        code: "",
         name: "",
         category: "",
+        code: "",
         current_stock: 0,
         image_url: "",
-        urlDoFabricante: ""
       });
       setImagePreview(null);
     }
@@ -127,10 +114,6 @@ export const PublicationFormDialog = ({
       toast({ title: "Erro", description: "Por favor, preencha os campos obrigatórios (Descrição e Categoria).", variant: "destructive" });
       return;
     }
-    if (!isValidUrl(formData.urlDoFabricante)) {
-      toast({ title: "URL Inválida", description: "Por favor, insira uma URL do fabricante válida ou deixe o campo em branco.", variant: "destructive" });
-      return;
-    }
 
     setLoading(true);
 
@@ -139,28 +122,36 @@ export const PublicationFormDialog = ({
       if (imageFile) {
         imageUrl = await uploadImage(imageFile) || imageUrl;
       }
-
-      const publicationData = { ...formData, image_url: imageUrl };
+      
+      // Prepara os dados para salvar, garantindo que a URL vá para o campo 'code'
+      const publicationData = {
+        name: formData.name,
+        category: formData.category,
+        code: formData.code, // 'code' agora contém a URL
+        current_stock: formData.current_stock,
+        image_url: imageUrl,
+      };
 
       if (publication) {
         // Editar publicação existente
         const { error } = await supabase.from('publications').update(publicationData).eq('id', publication.id);
-        if (error) throw error;
+        if (error) {
+          console.error("Erro do Supabase:", error);
+          throw new Error(error.message); // Lança o erro para ser pego no catch
+        }
         await logAction('update', 'publications', publication.id, publication, publicationData);
         showSuccessMessage('update', 'Publicação');
       } else {
-        // Criar nova publicação - CORRIGIDO
+        // Criar nova publicação
         const { error } = await supabase.from('publications').insert({
-          code: publicationData.code,
-          name: publicationData.name,
-          category: publicationData.category,
-          current_stock: publicationData.current_stock,
-          image_url: publicationData.image_url,
-          urlDoFabricante: publicationData.urlDoFabricante, // Garantir que a URL seja salva
+          ...publicationData,
           total_entries: publicationData.current_stock,
           total_exits: 0,
         });
-        if (error) throw error;
+        if (error) {
+          console.error("Erro do Supabase:", error);
+          throw new Error(error.message); // Lança o erro para ser pego no catch
+        }
         await logAction('create', 'publications', null, null, publicationData);
         showSuccessMessage('create', 'Publicação');
       }
@@ -171,7 +162,7 @@ export const PublicationFormDialog = ({
       console.error('Erro ao salvar publicação:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao salvar publicação.",
+        description: error.message || "Não foi possível salvar a publicação.",
         variant: "destructive"
       });
     } finally {
@@ -194,15 +185,16 @@ export const PublicationFormDialog = ({
           </div>
           
           <div>
-            <Label htmlFor="code">Código</Label>
-            <Input id="code" value={formData.code} onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))} placeholder="Código interno (opcional)" className="font-mono" />
-          </div>
-
-          <div>
-            <Label htmlFor="urlDoFabricante">URL do Fabricante (QR Code)</Label>
+            <Label htmlFor="code">URL (QR Code)</Label>
             <div className="relative">
               <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input id="urlDoFabricante" value={formData.urlDoFabricante} onChange={(e) => setFormData(prev => ({ ...prev, urlDoFabricante: e.target.value }))} placeholder="https://... (opcional)" className="pl-10" />
+              <Input 
+                id="code" 
+                value={formData.code} 
+                onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))} 
+                placeholder="https://... (opcional)" 
+                className="pl-10" 
+              />
             </div>
           </div>
           
