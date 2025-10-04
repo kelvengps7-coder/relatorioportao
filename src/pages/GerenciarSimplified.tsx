@@ -79,7 +79,8 @@ const GerenciarSimplified = () => {
       const { data, error } = await supabase.from('publications').select('*').order('category, name');
       if (error) throw error;
       setPublications(data || []);
-      toast({ title: "Sucesso", description: "Publicações carregadas." });
+      // Removido o toast de sucesso ao carregar publicações
+      // toast({ title: "Sucesso", description: "Publicações carregadas." });
     } catch (error) {
       console.error('Erro ao carregar publicações:', error);
       toast({ title: "Erro", description: "Não foi possível carregar as publicações.", variant: "destructive" });
@@ -139,7 +140,7 @@ const GerenciarSimplified = () => {
     
     return (
       (categoryFilter === "all" || pub.category === categoryFilter) &&
-      (matches(pub.name) || matches(pub.code) || matches(pub.urlDoFabricante))
+      (matches(pub.name) || matches(pub.code) || matches(pub.urlDoFabricante || ''))
     );
   });
   
@@ -263,6 +264,7 @@ const GerenciarSimplified = () => {
                         <TableHead className="w-20">Capa</TableHead>
                         <TableHead>Código</TableHead>
                         <TableHead>Nome</TableHead>
+                        <TableHead>URL</TableHead> {/* Nova coluna para a URL */}
                         <TableHead>Categoria</TableHead>
                         <TableHead>Estoque</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
@@ -281,6 +283,15 @@ const GerenciarSimplified = () => {
                            </TableCell>
                           <TableCell><CodeBadge code={pub.code || 'N/A'} /></TableCell>
                           <TableCell className="font-medium">{pub.name}</TableCell>
+                          <TableCell>
+                            {pub.urlDoFabricante ? (
+                              <a href={pub.urlDoFabricante} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                <Link className="h-4 w-4 inline-block mr-1" />Abrir URL
+                              </a>
+                            ) : (
+                              'N/A'
+                            )}
+                          </TableCell> 
                           <TableCell><Badge variant="secondary">{pub.category}</Badge></TableCell>
                           <TableCell>{pub.current_stock}</TableCell>
                           <TableCell className="text-right">

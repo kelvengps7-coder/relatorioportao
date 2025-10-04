@@ -33,9 +33,10 @@ export const PublicationFormDialog = ({
   const [formData, setFormData] = useState({
     name: "",
     category: "",
-    code: "", // Unificamos a URL para o campo 'code'
+    code: "",
     current_stock: 0,
     image_url: "",
+    urlDoFabricante: "", // Campo dedicado para a URL
   });
   
   const [loading, setLoading] = useState(false);
@@ -50,9 +51,10 @@ export const PublicationFormDialog = ({
       setFormData({
         name: publication.name || "",
         category: publication.category || "",
-        code: publication.code || "", // Carrega a URL do campo 'code'
+        code: publication.code || "",
         current_stock: publication.current_stock || 0,
         image_url: publication.image_url || "",
+        urlDoFabricante: publication.urlDoFabricante || "", // Carrega a URL do campo correto
       });
       setImagePreview(publication.image_url || null);
     } else {
@@ -62,6 +64,7 @@ export const PublicationFormDialog = ({
         code: "",
         current_stock: 0,
         image_url: "",
+        urlDoFabricante: "",
       });
       setImagePreview(null);
     }
@@ -123,13 +126,14 @@ export const PublicationFormDialog = ({
         imageUrl = await uploadImage(imageFile) || imageUrl;
       }
       
-      // Prepara os dados para salvar, garantindo que a URL vá para o campo 'code'
+      // Prepara os dados para salvar, com URL e Código separados
       const publicationData = {
         name: formData.name,
         category: formData.category,
-        code: formData.code, // 'code' agora contém a URL
+        code: formData.code, // Campo para o código de controle
         current_stock: formData.current_stock,
         image_url: imageUrl,
+        urlDoFabricante: formData.urlDoFabricante, // Campo para a URL
       };
 
       if (publication) {
@@ -183,16 +187,26 @@ export const PublicationFormDialog = ({
             <Label htmlFor="name">Descrição *</Label>
             <Input id="name" value={formData.name} onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))} placeholder="Nome da publicação" />
           </div>
+
+          <div>
+            <Label htmlFor="code">Código de Controle</Label>
+            <Input 
+              id="code" 
+              value={formData.code} 
+              onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))} 
+              placeholder="Ex: nwtls-T (opcional)" 
+            />
+          </div>
           
           <div>
-            <Label htmlFor="code">URL (QR Code)</Label>
+            <Label htmlFor="urlDoFabricante">URL do Fabricante (QR Code)</Label>
             <div className="relative">
               <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                id="code" 
-                value={formData.code} 
-                onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))} 
-                placeholder="https://... (opcional)" 
+                id="urlDoFabricante" 
+                value={formData.urlDoFabricante} 
+                onChange={(e) => setFormData(prev => ({ ...prev, urlDoFabricante: e.target.value }))} 
+                placeholder="https://exemplo.com/produto (opcional)" 
                 className="pl-10" 
               />
             </div>
